@@ -1,0 +1,206 @@
+---
+title: "Installation"
+description: "Install Operator OS using a precompiled binary, build it from source with Go, or run it in Docker."
+---
+
+Operator OS ships as a single statically compiled binary with no external runtime dependencies. Choose the installation method that fits your environment.
+
+<Tabs>
+
+<Tab title="Precompiled binaries">
+
+Download the appropriate archive for your platform from the [Releases page](https://github.com/avrilonline/Operator-OS/releases). Archives use the naming convention `operator_{OS}_{Arch}.tar.gz` (`.zip` on Windows).
+
+## Supported platforms
+
+| OS | Architecture | Archive suffix |
+|---|---|---|
+| Linux | x86_64 | `Linux_x86_64` |
+| Linux | ARM64 | `Linux_arm64` |
+| Linux | ARMv7 | `Linux_armv7` |
+| Linux | ARMv6 | `Linux_armv6` |
+| Linux | RISC-V 64 | `Linux_riscv64` |
+| macOS | Apple Silicon (ARM64) | `Darwin_arm64` |
+| macOS | Intel (x86_64) | `Darwin_x86_64` |
+| Windows | x86_64 | `Windows_x86_64` |
+| FreeBSD | x86_64 | `Freebsd_x86_64` |
+| FreeBSD | ARM64 | `Freebsd_arm64` |
+
+## Install commands
+
+<CodeGroup>
+
+```bash Linux (x86_64)
+curl -L https://github.com/avrilonline/Operator-OS/releases/latest/download/operator_Linux_x86_64.tar.gz \
+  | tar -xz operator
+sudo mv operator /usr/local/bin/operator
+```
+
+```bash Linux (ARM64)
+curl -L https://github.com/avrilonline/Operator-OS/releases/latest/download/operator_Linux_arm64.tar.gz \
+  | tar -xz operator
+sudo mv operator /usr/local/bin/operator
+```
+
+```bash Linux (ARMv7 — Raspberry Pi 32-bit)
+curl -L https://github.com/avrilonline/Operator-OS/releases/latest/download/operator_Linux_armv7.tar.gz \
+  | tar -xz operator
+sudo mv operator /usr/local/bin/operator
+```
+
+```bash Linux (RISC-V 64)
+curl -L https://github.com/avrilonline/Operator-OS/releases/latest/download/operator_Linux_riscv64.tar.gz \
+  | tar -xz operator
+sudo mv operator /usr/local/bin/operator
+```
+
+```bash macOS (Apple Silicon)
+curl -L https://github.com/avrilonline/Operator-OS/releases/latest/download/operator_Darwin_arm64.tar.gz \
+  | tar -xz operator
+mv operator ~/.local/bin/operator
+```
+
+```bash macOS (Intel)
+curl -L https://github.com/avrilonline/Operator-OS/releases/latest/download/operator_Darwin_x86_64.tar.gz \
+  | tar -xz operator
+mv operator ~/.local/bin/operator
+```
+
+```powershell Windows (PowerShell)
+Invoke-WebRequest -Uri https://github.com/avrilonline/Operator-OS/releases/latest/download/operator_Windows_x86_64.zip -OutFile operator.zip
+Expand-Archive operator.zip -DestinationPath $env:LOCALAPPDATA\operator
+# Add $env:LOCALAPPDATA\operator to your PATH
+```
+
+</CodeGroup>
+
+## Package managers (.deb / .rpm)
+
+Operator OS also publishes `.deb` and `.rpm` packages for Linux distributions. Download the appropriate package from the Releases page:
+
+```bash
+# Debian / Ubuntu
+sudo dpkg -i operator_x86_64.deb
+
+# Fedora / RHEL
+sudo rpm -i operator_x86_64.rpm
+```
+
+## Verify the installation
+
+```bash
+operator version
+```
+
+</Tab>
+
+<Tab title="Build from source">
+
+Building from source gives you the latest code and lets you cross-compile for any supported target.
+
+## Requirements
+
+- **Go 1.21 or later** — the `go.mod` file requires at minimum Go 1.21. Download from [go.dev/dl](https://go.dev/dl).
+- **Git**
+- **Make** (optional, but recommended)
+
+<Warning>
+  The Makefile sets `CGO_ENABLED=0` by default to produce a fully static binary. Do not override this unless you specifically need CGo for a custom build.
+</Warning>
+
+## Clone and build
+
+```bash
+git clone https://github.com/avrilonline/Operator-OS.git
+cd Operator-OS
+make deps
+make build
+```
+
+The binary is written to `build/operator-{platform}-{arch}` with a symlink at `build/operator`.
+
+## Install to PATH
+
+```bash
+make install
+```
+
+This installs the binary to `~/.local/bin/operator` by default. Override the prefix with `INSTALL_PREFIX`:
+
+```bash
+make install INSTALL_PREFIX=/usr/local
+```
+
+## Makefile targets
+
+| Target | Description |
+|---|---|
+| `make build` | Build for the current platform |
+| `make build-all` | Cross-compile for all supported platforms |
+| `make build-linux-arm64` | Build for Linux ARM64 (e.g. Raspberry Pi 64-bit) |
+| `make build-linux-arm` | Build for Linux ARMv7 (e.g. Raspberry Pi 32-bit) |
+| `make build-pi-zero` | Build both 32-bit and 64-bit binaries for Pi Zero 2 W |
+| `make install` | Install binary to `$INSTALL_PREFIX/bin` |
+| `make uninstall` | Remove the installed binary |
+| `make uninstall-all` | Remove binary and all operator data (`~/.operator`) |
+| `make clean` | Remove build artifacts |
+| `make deps` | Download and verify Go modules |
+| `make test` | Run the test suite |
+| `make vet` | Run `go vet` for static analysis |
+
+## Cross-compilation examples
+
+The Makefile exposes the underlying Go cross-compilation. You can also invoke it directly:
+
+```bash
+# Linux RISC-V 64-bit
+GOOS=linux GOARCH=riscv64 CGO_ENABLED=0 go build -o build/operator-linux-riscv64 ./cmd/operator
+
+# macOS Apple Silicon
+GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o build/operator-darwin-arm64 ./cmd/operator
+
+# Windows x86_64
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o build/operator-windows-amd64.exe ./cmd/operator
+```
+
+## Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `INSTALL_PREFIX` | `~/.local` | Installation root for `make install` |
+| `WORKSPACE_DIR` | `~/.operator/workspace` | Default agent workspace path |
+| `VERSION` | `git describe` | Version string embedded in the binary |
+
+</Tab>
+
+</Tabs>
+
+## Docker
+
+Operator OS publishes a minimal Alpine-based Docker image for running the gateway as a containerized service. This is the recommended approach for server deployments.
+
+```bash
+git clone https://github.com/avrilonline/Operator-OS.git
+cd Operator-OS
+
+# Start the gateway once to generate the default config
+docker compose -f docker/docker-compose.yml --profile gateway up
+
+# Edit the generated config with your API keys
+vim docker/data/config.json
+
+# Run the gateway in the background
+docker compose -f docker/docker-compose.yml --profile gateway up -d
+```
+
+For the full Docker deployment guide including resource limits, volume mounts, and the full-featured Node.js image with MCP support, see the [Docker deployment page](/deployment/docker).
+
+## After installation
+
+Once the binary is installed, initialize your workspace:
+
+```bash
+operator onboard
+```
+
+Then follow the [Quick Start](/quickstart) guide to configure your first agent.

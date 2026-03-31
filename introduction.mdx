@@ -1,0 +1,89 @@
+---
+title: "Introduction"
+description: "Operator OS is an ultra-lightweight AI agent operating system written in Go, designed to run on hardware as inexpensive as $10."
+---
+
+Operator OS is a high-performance personal AI agent framework that brings continuous intelligence to constrained environments. Written entirely in Go, it runs as a single self-contained binary with no runtime dependencies, no container overhead, and no bloated framework to install.
+
+Where typical Python or Node.js agent frameworks consume hundreds of megabytes of RAM, Operator OS runs in less than 10MB — making it practical on edge hardware, single-board computers, and embedded systems that other frameworks simply cannot support.
+
+<Note>
+  Operator OS consumes **less than 10MB of RAM** at runtime — 99% smaller than comparable Node.js or Python-based agent frameworks. It cold-starts in under 1 second, even on single-core 0.6GHz processors.
+</Note>
+
+## Core capabilities
+
+<CardGroup cols={2}>
+  <Card title="Ultra-lightweight engine" icon="feather">
+    Runs in under 10MB of RAM with sub-second cold starts. Deployable on hardware costing as little as $10, including Raspberry Pi Zero and RISC-V boards.
+  </Card>
+  <Card title="True portability" icon="microchip">
+    Ships as a single, statically compiled binary with no external dependencies. Runs on Linux, macOS, Windows, and FreeBSD across x86_64, ARM64, ARMv7, and RISC-V architectures.
+  </Card>
+  <Card title="Persistent memory" icon="database">
+    Structural long-term memory carries context seamlessly across sessions and reboots. Agents remember what they've done without requiring an external database.
+  </Card>
+  <Card title="Multi-channel messaging" icon="message">
+    Natively connects to Slack, Discord, Telegram, WhatsApp, DingTalk, Feishu, LINE, WeCom, and more. One agent, every channel.
+  </Card>
+  <Card title="Universal LLM support" icon="brain">
+    Zero-code model switching between OpenAI, Anthropic, Google Gemini, DeepSeek, Groq, Ollama, and 10+ other providers using a simple protocol-prefix system.
+  </Card>
+  <Card title="Built-in tools" icon="wrench">
+    Web search, cron scheduling, shell execution, and MCP (Model Context Protocol) server support are included out of the box — no plugins to install.
+  </Card>
+</CardGroup>
+
+## Architecture overview
+
+Operator OS is built around four composable primitives:
+
+**Gateway daemon** — The `operator gateway` process is the long-running service that connects your agent to the outside world. It manages channel connections (Slack, Discord, Telegram, etc.), routes inbound messages to the agent, and streams responses back. Run it on a server or a Raspberry Pi and leave it running indefinitely.
+
+**Agents** — The reasoning core. Each agent is configured with a model, a set of tools, a workspace, and memory. Agents receive messages, invoke tools, and produce responses. You interact with an agent directly via `operator agent -m "..."` or through any connected channel.
+
+**Tools** — Agents act through tools: file read/write, shell execution, web search, cron scheduling, and MCP server calls. The sandbox restricts tool access to the configured workspace directory by default, with an explicit opt-out for trusted environments.
+
+**Channels** — Channels are the interfaces through which users communicate with the agent. A channel can be a messaging platform (Slack, Telegram), a chat protocol (WhatsApp, DingTalk), or a hardware interface (MaixCam). Multiple channels can be active simultaneously.
+
+```
+User (Slack / Telegram / CLI)
+        │
+        ▼
+  ┌─────────────┐
+  │   Gateway   │  ←── operator gateway
+  └──────┬──────┘
+         │
+         ▼
+  ┌─────────────┐
+  │    Agent    │  ←── LLM + memory + tools
+  └──────┬──────┘
+         │
+    ┌────┴────┐
+    │  Tools  │  ←── exec, web, cron, MCP
+    └─────────┘
+```
+
+## Supported AI providers
+
+Operator uses a protocol-prefix system in `model_list` — no code changes required to switch models.
+
+| Provider | Protocol prefix | Example model |
+|---|---|---|
+| Anthropic | `anthropic/` | `anthropic/claude-sonnet-4.6` |
+| OpenAI | `openai/` | `openai/gpt-5.2` |
+| Google Gemini | `gemini/` | `gemini/gemini-3.1-pro` |
+| DeepSeek | `deepseek/` | `deepseek/deepseek-chat` |
+| Groq | `groq/` | `groq/llama3-8b-8192` |
+| Ollama (local) | `ollama/` | `ollama/llama3` |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get a running agent in 5 minutes. Download the binary, run `operator onboard`, and send your first message.
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Full installation guide covering precompiled binaries, building from source, and Docker deployment.
+  </Card>
+</CardGroup>

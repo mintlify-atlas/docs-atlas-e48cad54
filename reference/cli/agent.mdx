@@ -1,0 +1,130 @@
+---
+title: "operator agent"
+description: "Chat with the agent directly from the terminal — one-shot or interactive."
+---
+
+## Synopsis
+
+```bash
+operator agent [flags]
+```
+
+## Description
+
+`operator agent` starts the agent and connects you to it from your terminal. No gateway, no messaging channel — just direct access to the agent loop.
+
+There are two modes:
+
+- **One-shot mode** (with `-m`): send a single message, receive one response, and exit.
+- **Interactive mode** (without `-m`): start a persistent readline session. The agent remembers the conversation within the session. Type `exit` or `quit`, or press `Ctrl+C` to end the session.
+
+In interactive mode, Operator uses [chzyer/readline](https://github.com/chzyer/readline) for line editing and command history. History is written to a temporary file (`$TMPDIR/.operator_history`) and is limited to 100 entries. If readline is unavailable, the agent falls back to a simple stdin reader.
+
+Session history is keyed by the `--session` flag. Two invocations with the same session key share the same conversation context.
+
+## Options
+
+<ParamField query="--message" type="string">
+  Send a single message and exit (non-interactive mode). Shorthand: `-m`.
+</ParamField>
+
+<ParamField query="--session" type="string" default="cli:default">
+  Session key used to scope conversation history. Use different session keys to maintain separate conversations. Shorthand: `-s`.
+</ParamField>
+
+<ParamField query="--model" type="string">
+  Override the model for this invocation. Accepts the `model_name` short alias as defined in `model_list` in your `config.json` (e.g. `claude-sonnet-4.6`, `gpt4`). If not set, the model defined in `agents.defaults.model_name` is used.
+</ParamField>
+
+<ParamField query="--debug" type="boolean" default="false">
+  Enable debug-level logging. Shorthand: `-d`.
+</ParamField>
+
+## Examples
+
+**Send a one-shot message:**
+
+```bash
+operator agent -m "What is the current date?"
+```
+
+```
+🕸️ Today is Tuesday, 31 March 2026.
+```
+
+**Start an interactive session:**
+
+```bash
+operator agent
+```
+
+```
+🕸️ Interactive mode (Ctrl+C to exit)
+
+🕸️ You: What files are in my workspace?
+🕸️ Your workspace at ~/.operator/workspace contains:
+   - AGENTS.md
+   - IDENTITY.md
+   - SOUL.md
+   - USER.md
+   - memory/
+   - skills/
+
+🕸️ You: Summarise AGENTS.md for me
+🕸️ AGENTS.md describes the behavioural guidelines the agent follows...
+
+🕸️ You: exit
+Goodbye!
+```
+
+**Use a named session to continue a previous conversation:**
+
+```bash
+operator agent --session work:planning -m "What did we discuss earlier about the project?"
+```
+
+**Override the model for a single run:**
+
+```bash
+operator agent --model claude-sonnet-4.6 -m "Explain monads in one paragraph."
+```
+
+**Enable debug logging:**
+
+```bash
+operator agent --debug -m "List installed tools"
+```
+
+```
+🔍 Debug mode enabled
+🕸️ The following tools are loaded: exec, read_file, write_file, web_search, cron, ...
+```
+
+**Use with pipes (non-interactive):**
+
+```bash
+echo "Summarise this: $(cat README.md)" | xargs -I{} operator agent -m "{}"
+```
+
+## Session keys
+
+Session keys follow a `<scope>:<name>` convention, though any string is valid. The default is `cli:default`. Separate conversations can be maintained in parallel by using different keys:
+
+```bash
+# Work assistant
+operator agent --session work:default -m "Draft a standup update"
+
+# Personal assistant
+operator agent --session personal:default -m "What should I cook tonight?"
+```
+
+<Note>
+  Session history is held in memory during the process lifetime. It is not persisted to disk between `operator agent` invocations. For persistent memory across sessions, the agent uses the memory tools to write to the workspace.
+</Note>
+
+## Related commands
+
+- [`operator onboard`](/reference/cli/onboard) — set up config before first use
+- [`operator gateway`](/reference/cli/gateway) — run the agent as a persistent daemon connected to messaging channels
+- [`operator auth login`](/reference/cli/auth) — authenticate with a provider if you have not set an API key
+- [`operator skills`](/reference/cli/skills) — install skills the agent can use

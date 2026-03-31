@@ -1,0 +1,259 @@
+---
+title: "operator cron"
+description: "Manage scheduled agent jobs — add, list, enable, disable, and remove recurring tasks."
+---
+
+## Synopsis
+
+```bash
+operator cron <subcommand> [args] [flags]
+operator c <subcommand> [args] [flags]
+```
+
+## Description
+
+`operator cron` manages the set of scheduled jobs stored in `<workspace>/cron/jobs.json`. When the [gateway](/reference/cli/gateway) is running, it loads this file and executes each enabled job on its configured schedule. Each job sends a message to the agent loop — the agent processes it as if it were a user message and can optionally deliver the response to a messaging channel.
+
+Jobs can be scheduled in two ways:
+
+- **Every N seconds** — a simple interval trigger using `--every`
+- **Cron expression** — a standard 5-field cron expression using `--cron`
+
+Both formats are mutually exclusive within a single job.
+
+### Cron expression format
+
+Operator uses the [gronx](https://github.com/adhocore/gronx) library, which implements standard 5-field POSIX cron syntax:
+
+```
+┌──── minute      (0–59)
+│ ┌── hour        (0–23)
+│ │ ┌ day-of-month (1–31)
+│ │ │ ┌ month      (1–12)
+│ │ │ │ ┌ day-of-week (0–7, 0 and 7 = Sunday)
+│ │ │ │ │
+* * * * *
+```
+
+Common expressions:
+
+| Expression | Meaning |
+|---|---|
+| `0 9 * * *` | Every day at 09:00 |
+| `0 9 * * 1` | Every Monday at 09:00 |
+| `*/15 * * * *` | Every 15 minutes |
+| `0 8 1 * *` | First day of every month at 08:00 |
+| `0 18 * * 1-5` | Weekdays at 18:00 |
+
+### How the agent processes a cron job
+
+When a job fires, the gateway calls the agent loop with the job's `message` as the prompt. The job runs without session history — each execution is independent. If `--deliver` is set, the agent's response is sent to the specified channel and recipient.
+
+<Note>
+  Cron jobs only execute while `operator gateway` is running. If the gateway is stopped, no jobs fire. Jobs that were missed while the gateway was offline are not replayed.
+</Note>
+
+## Subcommands
+
+### operator cron add
+
+Add a new scheduled job.
+
+```bash
+operator cron add --name <name> --message <prompt> (--every <seconds> | --cron <expression>) [flags]
+```
+
+<ParamField query="--name" type="string" required>
+  A human-readable name for the job. Shorthand: `-n`.
+</ParamField>
+
+<ParamField query="--message" type="string" required>
+  The message (prompt) sent to the agent when the job fires. Shorthand: `-m`.
+</ParamField>
+
+<ParamField query="--every" type="integer">
+  Repeat interval in seconds. Mutually exclusive with `--cron`. Shorthand: `-e`.
+</ParamField>
+
+<ParamField query="--cron" type="string">
+  A 5-field cron expression. Mutually exclusive with `--every`. Shorthand: `-c`.
+</ParamField>
+
+<ParamField query="--deliver" type="boolean" default="false">
+  If set, the agent's response is delivered to the specified channel. Shorthand: `-d`.
+</ParamField>
+
+<ParamField query="--channel" type="string">
+  The channel to deliver the response to (e.g. `telegram`, `discord`, `slack`). Requires `--deliver`.
+</ParamField>
+
+<ParamField query="--to" type="string">
+  The recipient (user ID or chat ID) to deliver the response to. Requires `--deliver`.
+</ParamField>
+
+---
+
+### operator cron list
+
+List all scheduled jobs including disabled ones.
+
+```bash
+operator cron list
+```
+
+---
+
+### operator cron remove
+
+Remove a job by its ID.
+
+```bash
+operator cron remove <job-id>
+```
+
+---
+
+### operator cron enable
+
+Enable a disabled job by its ID.
+
+```bash
+operator cron enable <job-id>
+```
+
+---
+
+### operator cron disable
+
+Disable a job without removing it.
+
+```bash
+operator cron disable <job-id>
+```
+
+## Examples
+
+**Add a daily morning briefing job:**
+
+```bash
+operator cron add \
+  --name "morning-briefing" \
+  --message "Give me a brief morning summary: weather, news, and any reminders." \
+  --cron "0 8 * * *"
+```
+
+```
+✓ Added job 'morning-briefing' (job_7f3a1b2c)
+```
+
+**Add a job that runs every 5 minutes and delivers to Telegram:**
+
+```bash
+operator cron add \
+  --name "price-check" \
+  --message "Check the current price of BTC and alert me if it has moved more than 2% in the last hour." \
+  --every 300 \
+  --deliver \
+  --channel telegram \
+  --to 987654321
+```
+
+```
+✓ Added job 'price-check' (job_2d9e4f1a)
+```
+
+**List all scheduled jobs:**
+
+```bash
+operator cron list
+```
+
+```
+Scheduled Jobs:
+----------------
+  morning-briefing (job_7f3a1b2c)
+    Schedule: 0 8 * * *
+    Status: enabled
+    Next run: 2026-04-01 08:00
+
+  price-check (job_2d9e4f1a)
+    Schedule: every 300s
+    Status: enabled
+    Next run: 2026-03-31 14:35
+
+  weekly-review (job_9c1d2e3f)
+    Schedule: 0 17 * * 5
+    Status: disabled
+    Next run: scheduled
+```
+
+**Disable a job temporarily:**
+
+```bash
+operator cron disable job_2d9e4f1a
+```
+
+```
+✓ Job 'price-check' enabled
+```
+
+<Note>
+  The output message always says "enabled" regardless of whether you ran `enable` or `disable`. Use `operator cron list` to confirm the current state of a job.
+</Note>
+
+**Re-enable a job:**
+
+```bash
+operator cron enable job_2d9e4f1a
+```
+
+```
+✓ Job 'price-check' enabled
+```
+
+**Remove a job permanently:**
+
+```bash
+operator cron remove job_9c1d2e3f
+```
+
+```
+✓ Removed job job_9c1d2e3f
+```
+
+## Job storage
+
+All cron jobs are persisted in a JSON file:
+
+```
+<workspace>/cron/jobs.json
+```
+
+Default path: `~/.operator/workspace/cron/jobs.json`
+
+You can edit this file directly, but prefer using the `operator cron` subcommands to ensure the schema stays valid.
+
+## Agent-managed scheduling
+
+In addition to CLI-managed jobs, the agent can schedule tasks itself using the built-in `cron` tool. When you ask the agent to "remind me every morning" or "check my server logs daily at midnight", it calls the cron tool to create a job entry on your behalf.
+
+You can inspect and manage agent-created jobs with `operator cron list` and the other subcommands just like manually added jobs.
+
+## Cron execution timeout
+
+Jobs have a configurable execution timeout. If the agent does not finish processing within the limit, the job is cancelled. Configure this in `config.json`:
+
+```json
+{
+  "tools": {
+    "cron": {
+      "exec_timeout_minutes": 5
+    }
+  }
+}
+```
+
+## Related commands
+
+- [`operator gateway`](/reference/cli/gateway) — the gateway must be running for cron jobs to fire
+- [`operator agent`](/reference/cli/agent) — interact with the agent directly; the agent can also create cron jobs via the cron tool

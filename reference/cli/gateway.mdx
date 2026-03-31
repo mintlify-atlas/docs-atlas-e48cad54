@@ -1,0 +1,158 @@
+---
+title: "operator gateway"
+description: "Start the Operator gateway daemon to connect messaging channels and serve the agent loop."
+---
+
+## Synopsis
+
+```bash
+operator gateway [flags]
+operator g [flags]
+```
+
+## Description
+
+`operator gateway` starts the long-running gateway process. It connects all enabled messaging channels (Telegram, Discord, Slack, WhatsApp, etc.), starts the cron scheduler, initialises the heartbeat service, and exposes HTTP health endpoints — then routes incoming messages to the agent loop.
+
+The gateway runs in the foreground. Press `Ctrl+C` to trigger a graceful shutdown. All active connections are closed with a 15-second timeout before the process exits.
+
+### Startup sequence
+
+When you run `operator gateway`, the following services are started in order:
+
+1. **Config loaded** — reads `~/.operator/config.json` (or `$OPERATOR_CONFIG`)
+2. **Provider initialised** — creates the LLM provider from `model_list` / `providers`
+3. **Agent loop created** — tools and skills are loaded and counted
+4. **Cron service started** — loads `<workspace>/cron/jobs.json` and schedules any enabled jobs
+5. **Heartbeat service started** — sends periodic prompts to the agent on the configured interval
+6. **Device event service started** — monitors USB and other device events (if enabled)
+7. **Channel manager started** — connects each enabled channel and registers webhook routes
+8. **HTTP server started** — exposes `/health` and `/ready` endpoints on the gateway host/port
+9. **Agent loop running** — begins processing the message bus
+
+### Channels supported
+
+The gateway supports the following messaging channel integrations (configured in `config.json`):
+
+- Telegram
+- Discord
+- Slack
+- WhatsApp (bridge and native)
+- LINE
+- DingTalk
+- Feishu (Lark)
+- WeCom (Bot, App, and AI Bot variants)
+- QQ
+- OneBot (v11)
+- MaixCam
+
+### Health endpoints
+
+While the gateway is running, two HTTP endpoints are available on the configured `gateway.host` and `gateway.port`:
+
+| Endpoint | Description |
+|---|---|
+| `GET /health` | Returns `200 OK` when the server is up |
+| `GET /ready`  | Returns `200 OK` when channels have finished starting |
+
+Default address: `http://127.0.0.1:18790`
+
+## Options
+
+<ParamField query="--debug" type="boolean" default="false">
+  Enable debug-level logging. Prints verbose output for all internal events including message routing, tool calls, and channel activity. Shorthand: `-d`.
+</ParamField>
+
+## Examples
+
+**Start the gateway with default settings:**
+
+```bash
+operator gateway
+```
+
+```
+📦 Agent Status:
+  • Tools: 14 loaded
+  • Skills: 3/3 available
+✓ Channels enabled: telegram, discord
+✓ Gateway started on 127.0.0.1:18790
+Press Ctrl+C to stop
+✓ Cron service started
+✓ Heartbeat service started
+✓ Health endpoints available at http://127.0.0.1:18790/health and /ready
+```
+
+**Start the gateway with debug logging:**
+
+```bash
+operator gateway --debug
+```
+
+```
+🔍 Debug mode enabled
+📦 Agent Status:
+  • Tools: 14 loaded
+  • Skills: 3/3 available
+✓ Channels enabled: telegram, discord, slack
+✓ Gateway started on 127.0.0.1:18790
+Press Ctrl+C to stop
+✓ Cron service started
+✓ Heartbeat service started
+✓ Health endpoints available at http://127.0.0.1:18790/health and /ready
+```
+
+**Check health while the gateway is running (separate terminal):**
+
+```bash
+curl http://127.0.0.1:18790/health
+```
+
+**Run as a background service with systemd:**
+
+```ini
+[Unit]
+Description=Operator Gateway
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/operator gateway
+Restart=on-failure
+User=alice
+Environment=OPERATOR_CONFIG=/home/alice/.operator/config.json
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Graceful shutdown:**
+
+```
+^C
+Shutting down...
+✓ Gateway stopped
+```
+
+## Gateway host and port
+
+The host and port are configured in `config.json` under the `gateway` key:
+
+```json
+{
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18790
+  }
+}
+```
+
+<Warning>
+  Binding to `0.0.0.0` exposes webhook endpoints on all interfaces. Ensure your firewall restricts inbound access if running the gateway on a public host.
+</Warning>
+
+## Related commands
+
+- [`operator onboard`](/reference/cli/onboard) — create the config file before running the gateway
+- [`operator status`](/reference/cli/status) — inspect config and provider key status without starting the gateway
+- [`operator cron`](/reference/cli/cron) — manage scheduled jobs that run while the gateway is active
+- [`operator agent`](/reference/cli/agent) — interact with the agent directly without starting the gateway

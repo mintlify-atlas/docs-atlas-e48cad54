@@ -1,0 +1,389 @@
+---
+title: "Environment variables"
+description: "Complete list of environment variables that override config.json settings at runtime, following the OPERATOR_<SECTION>_<KEY> pattern."
+---
+
+Most fields in `~/.operator/config.json` can be overridden at runtime with environment variables. This is especially useful for Docker deployments, CI environments, or any situation where modifying a file on disk is inconvenient.
+
+## Naming convention
+
+```
+OPERATOR_<SECTION>_<KEY>=value
+```
+
+- Section and key names are uppercased.
+- Nested JSON keys are joined with underscores.
+- Boolean values: `true` / `false`.
+- Integer and float values: plain numeric strings (e.g., `"8192"`, `"0.7"`).
+
+**Example:**
+
+```bash
+# JSON equivalent: agents.defaults.model_name = "gpt4"
+export OPERATOR_AGENTS_DEFAULTS_MODEL_NAME=gpt4
+
+# JSON equivalent: tools.web.brave.enabled = true
+export OPERATOR_TOOLS_WEB_BRAVE_ENABLED=true
+```
+
+<Warning>
+  Complex nested map-style config — such as `tools.mcp.servers.<name>.*` and `model_list` entries — cannot be set via environment variables. Configure these in `config.json`.
+</Warning>
+
+---
+
+## Agent defaults
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_AGENTS_DEFAULTS_WORKSPACE` | string | `~/.operator/workspace` | Agent working directory. |
+| `OPERATOR_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE` | bool | `true` | Prevent reading/writing outside the workspace. |
+| `OPERATOR_AGENTS_DEFAULTS_ALLOW_READ_OUTSIDE_WORKSPACE` | bool | `false` | Allow reading (but not writing) outside the workspace. |
+| `OPERATOR_AGENTS_DEFAULTS_MODEL_NAME` | string | — | Active model alias. Must match a `model_name` in `model_list`. |
+| `OPERATOR_AGENTS_DEFAULTS_MODEL` | string | — | Deprecated alias for `MODEL_NAME`. Prefer `MODEL_NAME`. |
+| `OPERATOR_AGENTS_DEFAULTS_IMAGE_MODEL` | string | — | Model alias used for image-generation tasks. |
+| `OPERATOR_AGENTS_DEFAULTS_MAX_TOKENS` | int | `32768` | Maximum tokens per model response. |
+| `OPERATOR_AGENTS_DEFAULTS_TEMPERATURE` | float | _(provider default)_ | Sampling temperature (0.0–2.0). |
+| `OPERATOR_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS` | int | `50` | Maximum tool-call cycles per agent turn. |
+| `OPERATOR_AGENTS_DEFAULTS_MAX_MEDIA_SIZE` | int | `20971520` | Maximum media attachment size in bytes. |
+
+```bash
+export OPERATOR_AGENTS_DEFAULTS_MODEL_NAME=claude
+export OPERATOR_AGENTS_DEFAULTS_MAX_TOKENS=16384
+export OPERATOR_AGENTS_DEFAULTS_TEMPERATURE=0.5
+export OPERATOR_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS=30
+```
+
+---
+
+## Web tools
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_TOOLS_WEB_PROXY` | string | `""` | HTTP/SOCKS5 proxy for all web requests. |
+| `OPERATOR_TOOLS_WEB_FETCH_LIMIT_BYTES` | int | `10485760` | Maximum bytes fetched per URL (default 10 MB). |
+| `OPERATOR_TOOLS_WEB_BRAVE_ENABLED` | bool | `false` | Enable Brave Search. |
+| `OPERATOR_TOOLS_WEB_BRAVE_API_KEY` | string | `""` | Brave Search API key. |
+| `OPERATOR_TOOLS_WEB_BRAVE_MAX_RESULTS` | int | `5` | Maximum Brave search results per query. |
+| `OPERATOR_TOOLS_WEB_DUCKDUCKGO_ENABLED` | bool | `true` | Enable DuckDuckGo search. |
+| `OPERATOR_TOOLS_WEB_DUCKDUCKGO_MAX_RESULTS` | int | `5` | Maximum DuckDuckGo results per query. |
+| `OPERATOR_TOOLS_WEB_PERPLEXITY_ENABLED` | bool | `false` | Enable Perplexity search. |
+| `OPERATOR_TOOLS_WEB_PERPLEXITY_API_KEY` | string | `""` | Perplexity API key. |
+| `OPERATOR_TOOLS_WEB_PERPLEXITY_MAX_RESULTS` | int | `5` | Maximum Perplexity results per query. |
+| `OPERATOR_TOOLS_WEB_TAVILY_ENABLED` | bool | `false` | Enable Tavily search. |
+| `OPERATOR_TOOLS_WEB_TAVILY_API_KEY` | string | `""` | Tavily API key. |
+| `OPERATOR_TOOLS_WEB_TAVILY_BASE_URL` | string | `""` | Override Tavily API base URL. |
+| `OPERATOR_TOOLS_WEB_TAVILY_MAX_RESULTS` | int | `5` | Maximum Tavily results per query. |
+
+```bash
+export OPERATOR_TOOLS_WEB_BRAVE_ENABLED=true
+export OPERATOR_TOOLS_WEB_BRAVE_API_KEY=BSA-your-key
+export OPERATOR_TOOLS_WEB_PROXY=http://proxy.corp.example.com:8080
+```
+
+---
+
+## Exec tool
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_TOOLS_EXEC_ENABLE_DENY_PATTERNS` | bool | `true` | Enable built-in dangerous command blocking. |
+| `OPERATOR_TOOLS_EXEC_CUSTOM_DENY_PATTERNS` | string | `""` | Comma-separated additional deny regex patterns. |
+| `OPERATOR_TOOLS_EXEC_CUSTOM_ALLOW_PATTERNS` | string | `""` | Comma-separated allow-override regex patterns. |
+
+```bash
+# Disable all default command blocking (use with extreme care)
+export OPERATOR_TOOLS_EXEC_ENABLE_DENY_PATTERNS=false
+```
+
+---
+
+## Cron tool
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_TOOLS_CRON_EXEC_TIMEOUT_MINUTES` | int | `5` | Cron task execution timeout in minutes. `0` means no timeout. |
+
+```bash
+export OPERATOR_TOOLS_CRON_EXEC_TIMEOUT_MINUTES=10
+```
+
+---
+
+## MCP tool
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_TOOLS_MCP_ENABLED` | bool | `false` | Enable MCP server integration globally. |
+
+```bash
+export OPERATOR_TOOLS_MCP_ENABLED=true
+```
+
+<Note>
+  Individual MCP server definitions (`tools.mcp.servers.*`) are not configurable via environment variables. Define them in `config.json`.
+</Note>
+
+---
+
+## Path restrictions
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_TOOLS_ALLOW_READ_PATHS` | string | `""` | Comma-separated additional paths the agent may read. |
+| `OPERATOR_TOOLS_ALLOW_WRITE_PATHS` | string | `""` | Comma-separated additional paths the agent may write. |
+
+---
+
+## Skills
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_SKILLS_REGISTRIES_CLAWHUB_ENABLED` | bool | `true` | Enable the ClawHub skill registry. |
+| `OPERATOR_SKILLS_REGISTRIES_CLAWHUB_BASE_URL` | string | `https://clawhub.ai` | ClawHub API base URL. |
+| `OPERATOR_SKILLS_REGISTRIES_CLAWHUB_AUTH_TOKEN` | string | `""` | Authentication token for the registry. |
+| `OPERATOR_SKILLS_REGISTRIES_CLAWHUB_SEARCH_PATH` | string | `/api/v1/search` | Search endpoint path. |
+| `OPERATOR_SKILLS_REGISTRIES_CLAWHUB_SKILLS_PATH` | string | `/api/v1/skills` | Skills list endpoint path. |
+| `OPERATOR_SKILLS_REGISTRIES_CLAWHUB_DOWNLOAD_PATH` | string | `/api/v1/download` | Download endpoint path. |
+| `OPERATOR_SKILLS_REGISTRIES_CLAWHUB_TIMEOUT` | int | _(default)_ | Registry request timeout in seconds. |
+| `OPERATOR_SKILLS_REGISTRIES_CLAWHUB_MAX_ZIP_SIZE` | int | _(default)_ | Maximum skill ZIP size in bytes. |
+| `OPERATOR_SKILLS_REGISTRIES_CLAWHUB_MAX_RESPONSE_SIZE` | int | _(default)_ | Maximum registry response size in bytes. |
+| `OPERATOR_SKILLS_MAX_CONCURRENT_SEARCHES` | int | `2` | Maximum simultaneous registry search requests. |
+| `OPERATOR_SKILLS_SEARCH_CACHE_MAX_SIZE` | int | `50` | Maximum cached search entries. |
+| `OPERATOR_SKILLS_SEARCH_CACHE_TTL_SECONDS` | int | `300` | Search cache TTL in seconds. |
+
+---
+
+## Channels
+
+Each channel exposes environment variables for its primary fields. The pattern is `OPERATOR_CHANNELS_<CHANNEL>_<FIELD>`.
+
+### Telegram
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_CHANNELS_TELEGRAM_ENABLED` | bool | `false` | Enable Telegram channel. |
+| `OPERATOR_CHANNELS_TELEGRAM_TOKEN` | string | `""` | Telegram bot token. |
+| `OPERATOR_CHANNELS_TELEGRAM_BASE_URL` | string | `""` | Custom Telegram Bot API base URL. |
+| `OPERATOR_CHANNELS_TELEGRAM_PROXY` | string | `""` | HTTP/SOCKS5 proxy. |
+| `OPERATOR_CHANNELS_TELEGRAM_ALLOW_FROM` | string | `""` | Comma-separated allowlist of user IDs. |
+| `OPERATOR_CHANNELS_TELEGRAM_REASONING_CHANNEL_ID` | string | `""` | Chat ID for reasoning output. |
+
+### Discord
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_CHANNELS_DISCORD_ENABLED` | bool | `false` | Enable Discord channel. |
+| `OPERATOR_CHANNELS_DISCORD_TOKEN` | string | `""` | Discord bot token. |
+| `OPERATOR_CHANNELS_DISCORD_PROXY` | string | `""` | HTTP/SOCKS5 proxy. |
+| `OPERATOR_CHANNELS_DISCORD_ALLOW_FROM` | string | `""` | Comma-separated allowlist of user IDs. |
+| `OPERATOR_CHANNELS_DISCORD_MENTION_ONLY` | bool | `false` | Only respond to @mentions (deprecated; use `group_trigger`). |
+| `OPERATOR_CHANNELS_DISCORD_REASONING_CHANNEL_ID` | string | `""` | Channel ID for reasoning output. |
+
+### Slack
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_CHANNELS_SLACK_ENABLED` | bool | `false` | Enable Slack channel. |
+| `OPERATOR_CHANNELS_SLACK_BOT_TOKEN` | string | `""` | Slack bot OAuth token (`xoxb-…`). |
+| `OPERATOR_CHANNELS_SLACK_APP_TOKEN` | string | `""` | Slack app-level token (`xapp-…`). |
+| `OPERATOR_CHANNELS_SLACK_ALLOW_FROM` | string | `""` | Comma-separated allowlist of user IDs. |
+| `OPERATOR_CHANNELS_SLACK_REASONING_CHANNEL_ID` | string | `""` | Channel ID for reasoning output. |
+
+### WhatsApp
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_CHANNELS_WHATSAPP_ENABLED` | bool | `false` | Enable WhatsApp channel. |
+| `OPERATOR_CHANNELS_WHATSAPP_BRIDGE_URL` | string | `ws://localhost:3001` | WhatsApp bridge WebSocket URL. |
+| `OPERATOR_CHANNELS_WHATSAPP_USE_NATIVE` | bool | `false` | Use native mode instead of bridge. |
+| `OPERATOR_CHANNELS_WHATSAPP_SESSION_STORE_PATH` | string | `""` | Path to store session data. |
+| `OPERATOR_CHANNELS_WHATSAPP_ALLOW_FROM` | string | `""` | Comma-separated allowlist. |
+| `OPERATOR_CHANNELS_WHATSAPP_REASONING_CHANNEL_ID` | string | `""` | JID for reasoning output. |
+
+### Feishu
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_CHANNELS_FEISHU_ENABLED` | bool | `false` | Enable Feishu channel. |
+| `OPERATOR_CHANNELS_FEISHU_APP_ID` | string | `""` | Feishu app ID. |
+| `OPERATOR_CHANNELS_FEISHU_APP_SECRET` | string | `""` | Feishu app secret. |
+| `OPERATOR_CHANNELS_FEISHU_ENCRYPT_KEY` | string | `""` | Feishu event encryption key. |
+| `OPERATOR_CHANNELS_FEISHU_VERIFICATION_TOKEN` | string | `""` | Feishu webhook verification token. |
+| `OPERATOR_CHANNELS_FEISHU_ALLOW_FROM` | string | `""` | Comma-separated allowlist of user IDs. |
+| `OPERATOR_CHANNELS_FEISHU_REASONING_CHANNEL_ID` | string | `""` | Chat ID for reasoning output. |
+
+### DingTalk
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_CHANNELS_DINGTALK_ENABLED` | bool | `false` | Enable DingTalk channel. |
+| `OPERATOR_CHANNELS_DINGTALK_CLIENT_ID` | string | `""` | DingTalk app client ID. |
+| `OPERATOR_CHANNELS_DINGTALK_CLIENT_SECRET` | string | `""` | DingTalk app client secret. |
+| `OPERATOR_CHANNELS_DINGTALK_ALLOW_FROM` | string | `""` | Comma-separated allowlist of user IDs. |
+| `OPERATOR_CHANNELS_DINGTALK_REASONING_CHANNEL_ID` | string | `""` | Chat ID for reasoning output. |
+
+### QQ
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_CHANNELS_QQ_ENABLED` | bool | `false` | Enable QQ channel. |
+| `OPERATOR_CHANNELS_QQ_APP_ID` | string | `""` | QQ app ID. |
+| `OPERATOR_CHANNELS_QQ_APP_SECRET` | string | `""` | QQ app secret. |
+| `OPERATOR_CHANNELS_QQ_ALLOW_FROM` | string | `""` | Comma-separated allowlist of user IDs. |
+| `OPERATOR_CHANNELS_QQ_REASONING_CHANNEL_ID` | string | `""` | Chat ID for reasoning output. |
+
+### LINE
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_CHANNELS_LINE_ENABLED` | bool | `false` | Enable LINE channel. |
+| `OPERATOR_CHANNELS_LINE_CHANNEL_SECRET` | string | `""` | LINE channel secret. |
+| `OPERATOR_CHANNELS_LINE_CHANNEL_ACCESS_TOKEN` | string | `""` | LINE channel access token. |
+| `OPERATOR_CHANNELS_LINE_WEBHOOK_HOST` | string | `0.0.0.0` | Webhook listener bind address. |
+| `OPERATOR_CHANNELS_LINE_WEBHOOK_PORT` | int | `18791` | Webhook listener port. |
+| `OPERATOR_CHANNELS_LINE_WEBHOOK_PATH` | string | `/webhook/line` | Webhook endpoint path. |
+| `OPERATOR_CHANNELS_LINE_ALLOW_FROM` | string | `""` | Comma-separated allowlist of user IDs. |
+| `OPERATOR_CHANNELS_LINE_REASONING_CHANNEL_ID` | string | `""` | Chat ID for reasoning output. |
+
+### OneBot
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_CHANNELS_ONEBOT_ENABLED` | bool | `false` | Enable OneBot channel. |
+| `OPERATOR_CHANNELS_ONEBOT_WS_URL` | string | `ws://127.0.0.1:3001` | OneBot WebSocket server URL. |
+| `OPERATOR_CHANNELS_ONEBOT_ACCESS_TOKEN` | string | `""` | OneBot access token. |
+| `OPERATOR_CHANNELS_ONEBOT_RECONNECT_INTERVAL` | int | `5` | Reconnect interval in seconds. |
+| `OPERATOR_CHANNELS_ONEBOT_ALLOW_FROM` | string | `""` | Comma-separated allowlist of user IDs. |
+| `OPERATOR_CHANNELS_ONEBOT_REASONING_CHANNEL_ID` | string | `""` | Group/user ID for reasoning output. |
+
+### MaixCam
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_CHANNELS_MAIXCAM_ENABLED` | bool | `false` | Enable MaixCam channel. |
+| `OPERATOR_CHANNELS_MAIXCAM_HOST` | string | `0.0.0.0` | Listener bind address. |
+| `OPERATOR_CHANNELS_MAIXCAM_PORT` | int | `18790` | Listener port. |
+| `OPERATOR_CHANNELS_MAIXCAM_ALLOW_FROM` | string | `""` | Comma-separated allowlist of device IDs. |
+| `OPERATOR_CHANNELS_MAIXCAM_REASONING_CHANNEL_ID` | string | `""` | Channel ID for reasoning output. |
+
+### WeCom Bot
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_CHANNELS_WECOM_ENABLED` | bool | `false` | Enable WeCom Bot channel. |
+| `OPERATOR_CHANNELS_WECOM_TOKEN` | string | `""` | WeCom verification token. |
+| `OPERATOR_CHANNELS_WECOM_ENCODING_AES_KEY` | string | `""` | 43-character AES encoding key. |
+| `OPERATOR_CHANNELS_WECOM_WEBHOOK_URL` | string | `""` | WeCom group robot webhook URL. |
+| `OPERATOR_CHANNELS_WECOM_WEBHOOK_PATH` | string | `/webhook/wecom` | Webhook endpoint path. |
+| `OPERATOR_CHANNELS_WECOM_ALLOW_FROM` | string | `""` | Comma-separated allowlist of user IDs. |
+| `OPERATOR_CHANNELS_WECOM_REPLY_TIMEOUT` | int | `5` | Reply timeout in seconds. |
+| `OPERATOR_CHANNELS_WECOM_REASONING_CHANNEL_ID` | string | `""` | Chat ID for reasoning output. |
+
+### WeCom App
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_CHANNELS_WECOM_APP_ENABLED` | bool | `false` | Enable WeCom App channel. |
+| `OPERATOR_CHANNELS_WECOM_APP_CORP_ID` | string | `""` | WeCom corporation ID. |
+| `OPERATOR_CHANNELS_WECOM_APP_CORP_SECRET` | string | `""` | WeCom application secret. |
+| `OPERATOR_CHANNELS_WECOM_APP_AGENT_ID` | int | `0` | WeCom application agent ID. |
+| `OPERATOR_CHANNELS_WECOM_APP_TOKEN` | string | `""` | WeCom verification token. |
+| `OPERATOR_CHANNELS_WECOM_APP_ENCODING_AES_KEY` | string | `""` | 43-character AES encoding key. |
+| `OPERATOR_CHANNELS_WECOM_APP_WEBHOOK_PATH` | string | `/webhook/wecom-app` | Webhook endpoint path. |
+| `OPERATOR_CHANNELS_WECOM_APP_ALLOW_FROM` | string | `""` | Comma-separated allowlist of user IDs. |
+| `OPERATOR_CHANNELS_WECOM_APP_REPLY_TIMEOUT` | int | `5` | Reply timeout in seconds. |
+| `OPERATOR_CHANNELS_WECOM_APP_REASONING_CHANNEL_ID` | string | `""` | Chat ID for reasoning output. |
+
+### WeCom AI Bot
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_CHANNELS_WECOM_AIBOT_ENABLED` | bool | `false` | Enable WeCom AI Bot channel. |
+| `OPERATOR_CHANNELS_WECOM_AIBOT_TOKEN` | string | `""` | WeCom verification token. |
+| `OPERATOR_CHANNELS_WECOM_AIBOT_ENCODING_AES_KEY` | string | `""` | 43-character AES encoding key. |
+| `OPERATOR_CHANNELS_WECOM_AIBOT_WEBHOOK_PATH` | string | `/webhook/wecom-aibot` | Webhook endpoint path. |
+| `OPERATOR_CHANNELS_WECOM_AIBOT_MAX_STEPS` | int | `10` | Maximum streaming steps per response. |
+| `OPERATOR_CHANNELS_WECOM_AIBOT_WELCOME_MESSAGE` | string | `Hello! I'm your AI assistant...` | Message sent on chat open. |
+| `OPERATOR_CHANNELS_WECOM_AIBOT_ALLOW_FROM` | string | `""` | Comma-separated allowlist of user IDs. |
+| `OPERATOR_CHANNELS_WECOM_AIBOT_REASONING_CHANNEL_ID` | string | `""` | Chat ID for reasoning output. |
+
+### Standard channel
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_CHANNELS_STANDARD_ENABLED` | bool | `false` | Enable the standard WebSocket channel. |
+| `OPERATOR_CHANNELS_STANDARD_TOKEN` | string | `""` | Bearer token for authenticating connections. |
+| `OPERATOR_CHANNELS_STANDARD_ALLOW_FROM` | string | `""` | Comma-separated allowlist of client IDs. |
+
+---
+
+## Heartbeat
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_HEARTBEAT_ENABLED` | bool | `true` | Enable heartbeat pings. |
+| `OPERATOR_HEARTBEAT_INTERVAL` | int | `30` | Heartbeat interval in minutes (minimum effective: 5). |
+
+---
+
+## Devices
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_DEVICES_ENABLED` | bool | `false` | Enable device monitoring. |
+| `OPERATOR_DEVICES_MONITOR_USB` | bool | `true` | Monitor USB plug/unplug events. |
+
+---
+
+## Gateway
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_GATEWAY_HOST` | string | `127.0.0.1` | Bind address for the local gateway. |
+| `OPERATOR_GATEWAY_PORT` | int | `18790` | TCP port for the local gateway. |
+
+---
+
+## Media cleanup
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `OPERATOR_MEDIA_CLEANUP_ENABLED` | bool | `true` | Enable automatic media file cleanup. |
+| `OPERATOR_MEDIA_CLEANUP_MAX_AGE` | int | `30` | Age threshold for cleanup in minutes. |
+| `OPERATOR_MEDIA_CLEANUP_INTERVAL` | int | `5` | Cleanup job interval in minutes. |
+
+---
+
+## Path overrides
+
+| Variable | Type | Description |
+|---|---|---|
+| `OPERATOR_CONFIG` | string | Override the full path to the config file. Default is `~/.operator/config.json`. |
+| `OPERATOR_HOME` | string | Override the base directory used for default workspace path. Default is `~/.operator`. The workspace defaults to `$OPERATOR_HOME/workspace`. Does not change the config file path — use `OPERATOR_CONFIG` for that. |
+
+```bash
+# Point to a custom config file path
+export OPERATOR_CONFIG=/etc/operator/config.json
+
+# Change the base directory for workspace defaults
+export OPERATOR_HOME=/srv/operator
+```
+
+---
+
+## Docker / container example
+
+A minimal environment for a containerized deployment using Telegram and Anthropic:
+
+```bash
+OPERATOR_CONFIG=/data/operator/config.json
+OPERATOR_AGENTS_DEFAULTS_MODEL_NAME=claude
+OPERATOR_CHANNELS_TELEGRAM_ENABLED=true
+OPERATOR_CHANNELS_TELEGRAM_TOKEN=YOUR_BOT_TOKEN
+OPERATOR_CHANNELS_TELEGRAM_ALLOW_FROM=123456789
+OPERATOR_TOOLS_WEB_DUCKDUCKGO_ENABLED=true
+OPERATOR_HEARTBEAT_ENABLED=false
+```
+
+Mount `config.json` (containing `model_list` with the Anthropic API key) at the path pointed to by `OPERATOR_CONFIG`, or use the `OPERATOR_AGENTS_DEFAULTS_MODEL_NAME` variable alongside a `config.json` that has credentials pre-filled.

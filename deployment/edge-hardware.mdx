@@ -1,0 +1,424 @@
+---
+title: "Edge hardware deployment"
+description: "Deploy Operator OS on resource-constrained hardware including Raspberry Pi, RISC-V boards, and other ARM/x86 edge devices. Covers cross-compilation, auto-start with systemd, and hardware interface access."
+---
+
+Operator OS was designed from the ground up for constrained environments. Its Go runtime, CGO-free build, and single-binary distribution make it uniquely suited to edge hardware that cannot run typical Node.js or Python agent frameworks.
+
+<CardGroup cols={3}>
+  <Card title="<10 MB RAM" icon="microchip">
+    99% smaller memory footprint than equivalent Python or Node.js agents.
+  </Card>
+  <Card title="<1s boot" icon="bolt">
+    Cold starts in under one second, even on single-core 0.6 GHz processors.
+  </Card>
+  <Card title="Single binary" icon="box">
+    No runtime dependencies, no package manager, no interpreter — copy and run.
+  </Card>
+</CardGroup>
+
+---
+
+## Supported architectures
+
+Precompiled binaries are published for every release via GoReleaser:
+
+| Architecture | GOARCH | Example hardware |
+|---|---|---|
+| x86\_64 | `amd64` | Standard servers, NUCs, x86 SBCs |
+| ARM64 | `arm64` | Raspberry Pi 3/4/5, Raspberry Pi Zero 2 W (64-bit), NVIDIA Jetson |
+| ARMv7 | `arm` (GOARM=7) | Raspberry Pi Zero 2 W (32-bit), older Pi models |
+| ARMv6 | `arm` (GOARM=6) | Raspberry Pi Zero (original) |
+| RISC-V 64 | `riscv64` | VisionFive 2, Milk-V Mars, Lichee Pi 4A |
+| LoongArch64 | `loong64` | Loongson 3A5000/3A6000 boards |
+
+Download the appropriate archive from the [Releases page](https://github.com/avrilonline/Operator-OS/releases). Archives follow the naming convention `operator_Linux_<arch>.tar.gz`.
+
+---
+
+## Cross-compilation
+
+Operator OS uses `CGO_ENABLED=0`, which means you can cross-compile for any target from any host with Go 1.25+ installed. No toolchain, no sysroot.
+
+<Tabs>
+
+<Tab title="ARM64">
+
+```bash
+# For Raspberry Pi 3, 4, 5 and Zero 2 W (64-bit OS)
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build \
+  -tags stdjson \
+  -ldflags "-s -w" \
+  -o build/operator-linux-arm64 \
+  ./cmd/operator
+```
+
+Or use the Makefile shortcut:
+
+```bash
+make build-linux-arm64
+```
+
+</Tab>
+
+<Tab title="ARMv7">
+
+```bash
+# For Raspberry Pi Zero 2 W (32-bit OS) and other ARMv7 boards
+GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build \
+  -tags stdjson \
+  -ldflags "-s -w" \
+  -o build/operator-linux-arm \
+  ./cmd/operator
+```
+
+Or use the Makefile shortcut:
+
+```bash
+make build-linux-arm
+```
+
+To build both 32-bit and 64-bit Pi binaries at once:
+
+```bash
+make build-pi-zero
+```
+
+</Tab>
+
+<Tab title="RISC-V 64">
+
+```bash
+GOOS=linux GOARCH=riscv64 CGO_ENABLED=0 go build \
+  -tags stdjson \
+  -ldflags "-s -w" \
+  -o build/operator-linux-riscv64 \
+  ./cmd/operator
+```
+
+</Tab>
+
+<Tab title="All platforms">
+
+Build for all supported platforms in one command:
+
+```bash
+make build-all
+```
+
+This produces binaries in `build/` for: `linux-amd64`, `linux-arm64`, `linux-arm` (ARMv7 and ARMv6), `linux-riscv64`, `linux-loong64`, `darwin-arm64`, and `windows-amd64.exe`.
+
+</Tab>
+
+</Tabs>
+
+---
+
+## Raspberry Pi setup
+
+<Tabs>
+
+<Tab title="Raspberry Pi 4 / 5 (64-bit)">
+
+<Steps>
+
+<Step title="Transfer the binary">
+
+From your build machine:
+
+```bash
+scp build/operator-linux-arm64 pi@raspberrypi.local:/usr/local/bin/operator
+```
+
+Or download directly on the Pi:
+
+```bash
+curl -L https://github.com/avrilonline/Operator-OS/releases/latest/download/operator_Linux_arm64.tar.gz \
+  | tar -xz -C /usr/local/bin operator
+chmod +x /usr/local/bin/operator
+```
+
+</Step>
+
+<Step title="Initialize the workspace">
+
+```bash
+operator onboard
+```
+
+This creates `~/.operator/config.json` and `~/.operator/workspace/`.
+
+</Step>
+
+<Step title="Configure API keys">
+
+```bash
+nano ~/.operator/config.json
+```
+
+Add at minimum a `model_list` entry and set `agents.defaults.model`. See [Configuration overview](/configuration/overview) for the full schema.
+
+</Step>
+
+<Step title="Run the gateway">
+
+```bash
+operator gateway
+```
+
+</Step>
+
+</Steps>
+
+</Tab>
+
+<Tab title="Raspberry Pi Zero 2 W">
+
+The Pi Zero 2 W runs a quad-core ARM Cortex-A53 at 1 GHz. It can run either 32-bit (ARMv7) or 64-bit (ARM64) Raspberry Pi OS.
+
+<Steps>
+
+<Step title="Determine your OS bitness">
+
+```bash
+uname -m
+# aarch64 → use arm64 binary
+# armv7l  → use arm (ARMv7) binary
+```
+
+</Step>
+
+<Step title="Transfer the correct binary">
+
+```bash
+# 64-bit OS
+scp build/operator-linux-arm64 pi@pizero.local:/usr/local/bin/operator
+
+# 32-bit OS
+scp build/operator-linux-arm pi@pizero.local:/usr/local/bin/operator
+
+chmod +x /usr/local/bin/operator
+```
+
+</Step>
+
+<Step title="Initialize and configure">
+
+```bash
+operator onboard
+nano ~/.operator/config.json
+```
+
+</Step>
+
+<Step title="Run the gateway">
+
+```bash
+operator gateway
+```
+
+On the Zero 2 W, expect roughly 6–8 MB RSS at steady state when connected to one channel.
+
+</Step>
+
+</Steps>
+
+</Tab>
+
+<Tab title="Raspberry Pi Zero (original)">
+
+The original Pi Zero uses a single-core ARM1176JZF-S (ARMv6). Use the `GOARM=6` build:
+
+```bash
+# Cross-compile on your build machine
+GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=0 go build \
+  -tags stdjson \
+  -ldflags "-s -w" \
+  -o build/operator-linux-armv6 \
+  ./cmd/operator
+
+scp build/operator-linux-armv6 pi@pizero.local:/usr/local/bin/operator
+chmod +x /usr/local/bin/operator
+```
+
+<Warning>
+  The Pi Zero (first generation) has only 512 MB RAM and a 700 MHz single-core CPU. Disable all unnecessary channels and use a fast, low-latency model to avoid timeout issues.
+</Warning>
+
+</Tab>
+
+</Tabs>
+
+---
+
+## RISC-V setup
+
+<Steps>
+
+<Step title="Transfer the binary to the board">
+
+```bash
+scp build/operator-linux-riscv64 user@riscv-board.local:/usr/local/bin/operator
+chmod +x /usr/local/bin/operator
+```
+
+Boards confirmed working: StarFive VisionFive 2, Milk-V Mars, Sipeed Lichee Pi 4A.
+
+</Step>
+
+<Step title="Initialize the workspace">
+
+```bash
+operator onboard
+```
+
+</Step>
+
+<Step title="Configure and start">
+
+```bash
+nano ~/.operator/config.json
+operator gateway
+```
+
+</Step>
+
+</Steps>
+
+---
+
+## Hardware interface access
+
+Operator OS agents can interact with edge peripherals through the `exec` tool, which lets the agent run shell commands within its workspace sandbox.
+
+### I2C
+
+Read a sensor register over I2C using standard Linux userspace tools:
+
+```bash
+# List I2C buses
+i2cdetect -l
+
+# Scan bus 1 for devices
+i2cdetect -y 1
+
+# Read a register (e.g., BME280 chip ID at 0x60, register 0xD0)
+i2cget -y 1 0x76 0xD0
+```
+
+Grant the agent access to I2C devices by adding the `operator` user to the `i2c` group:
+
+```bash
+sudo usermod -aG i2c operator
+```
+
+### SPI
+
+SPI devices are accessible via `/dev/spidev*`. Enable SPI on Raspberry Pi by adding `dtparam=spi=on` to `/boot/config.txt` and rebooting. The `spi-tools` package provides `spi-config` and `spi-pipe` for testing.
+
+<Tip>
+  You can instruct the agent to periodically poll sensors using the built-in cron tool and store readings in the workspace. This enables autonomous environmental monitoring without any additional application code.
+</Tip>
+
+---
+
+## Resource requirements
+
+| Resource | Minimum | Typical (one channel) | Notes |
+|---|---|---|---|
+| RAM | 4 MB | 6–10 MB | Grows slightly with active session memory |
+| Storage | 5 MB | 20–50 MB | Binary + workspace + memory DB |
+| CPU | Single-core 600 MHz | Any | Most time is spent waiting on LLM API I/O |
+| Network | Any | Any | Required for LLM API calls |
+| OS | Linux kernel 4.4+ | Linux kernel 5.x+ | Any libc-free userspace works; Alpine recommended |
+
+---
+
+## Auto-start with systemd
+
+Running the gateway as a systemd service ensures it starts on boot and restarts automatically on failure.
+
+<Steps>
+
+<Step title="Create the service file">
+
+Create `/etc/systemd/system/operator.service`:
+
+```ini
+[Unit]
+Description=Operator OS Gateway
+Documentation=https://operator.onl/docs
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=operator
+Group=operator
+ExecStart=/usr/local/bin/operator gateway
+Restart=on-failure
+RestartSec=5s
+
+# Resource limits (optional — conservative defaults for edge boards)
+MemoryMax=64M
+CPUQuota=50%
+
+# Working directory (operator reads config from $HOME/.operator)
+WorkingDirectory=/home/operator
+
+# Environment
+Environment=TZ=UTC
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/operator/.operator
+
+[Install]
+WantedBy=multi-user.target
+```
+
+</Step>
+
+<Step title="Create the operator user (if not already present)">
+
+```bash
+sudo useradd -r -m -s /bin/false operator
+```
+
+</Step>
+
+<Step title="Initialize the workspace as the operator user">
+
+```bash
+sudo -u operator /usr/local/bin/operator onboard
+sudo -u operator nano /home/operator/.operator/config.json
+```
+
+</Step>
+
+<Step title="Enable and start the service">
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable operator.service
+sudo systemctl start operator.service
+```
+
+</Step>
+
+<Step title="Check status">
+
+```bash
+sudo systemctl status operator.service
+sudo journalctl -u operator.service -f
+```
+
+</Step>
+
+</Steps>
+
+<Note>
+  On systems without systemd (e.g., Alpine Linux with OpenRC), use a similar `/etc/init.d/operator` script or run the gateway under `supervise` / `s6-svscan`. The binary has no dependencies on systemd itself.
+</Note>

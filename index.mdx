@@ -1,97 +1,95 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Operator OS"
+description: "The ultra-lightweight AI agent operating system. Run autonomous agents on hardware starting at $10 with a memory footprint under 10MB."
 ---
 
-## Setting up
+Operator OS is a high-performance personal AI agent framework written in Go. Deploy a single self-contained binary to any device — from a Raspberry Pi to a cloud server — and connect your agents to the LLMs and messaging channels you already use.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get your agent online in under five minutes
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Installation" icon="download" href="/installation">
+    Download binaries or build from source
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Configuration" icon="sliders" href="/configuration/overview">
+    Configure models, channels, and tools
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="CLI Reference" icon="terminal" href="/reference/cli/onboard">
+    Every command, flag, and option
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Why Operator OS
 
-Everything you need to create world-class documentation.
+<CardGroup cols={2}>
+  <Card title="Ultra-lightweight" icon="feather">
+    Under 10MB RAM. Cold starts in under 1 second, even on a single-core 0.6GHz processor.
+  </Card>
+  <Card title="Single binary" icon="box">
+    Deploys as one self-contained executable across RISC-V, ARM64, and x86_64.
+  </Card>
+  <Card title="Persistent memory" icon="brain">
+    Structural long-term memory that carries context across sessions and reboots.
+  </Card>
+  <Card title="Multi-channel" icon="comments">
+    Slack, Discord, Telegram, WhatsApp, DingTalk, Feishu, LINE, WeCom, and QQ — out of the box.
+  </Card>
+  <Card title="Any LLM" icon="microchip">
+    OpenAI, Anthropic, Google Gemini, Groq, Ollama, DeepSeek, and more — zero code changes.
+  </Card>
+  <Card title="Extensible" icon="puzzle-piece">
+    Expand capabilities with MCP servers and installable skills from the ClawHub registry.
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Get started in three steps
 
-## Need inspiration?
+<Steps>
+  <Step title="Install Operator OS">
+    Download the binary for your platform or build from source:
+    ```bash
+    # Build from source (requires Go 1.21+)
+    git clone https://github.com/operatoronline/standard-operator.git
+    cd standard-operator
+    make deps && make build
+    ```
+  </Step>
+  <Step title="Initialize your workspace">
+    Run the interactive onboarding wizard to create your configuration:
+    ```bash
+    operator onboard
+    ```
+    This creates `~/.operator/config.json` with your chosen LLM and channels.
+  </Step>
+  <Step title="Start the Gateway">
+    Bring your agent online and connect it to your messaging channels:
+    ```bash
+    operator gateway
+    ```
+    You can now message your agent through Slack, Telegram, Discord, or any configured channel.
+  </Step>
+</Steps>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## Explore the docs
+
+<CardGroup cols={2}>
+  <Card title="AI Model providers" icon="robot" href="/configuration/models">
+    Configure OpenAI, Anthropic, Gemini, Ollama, and more
+  </Card>
+  <Card title="Messaging channels" icon="message" href="/channels/overview">
+    Connect Slack, Telegram, Discord, WhatsApp, and others
+  </Card>
+  <Card title="Built-in tools" icon="wrench" href="/tools/overview">
+    Shell execution, web search, filesystem, cron scheduling, and hardware I/O
+  </Card>
+  <Card title="MCP integration" icon="plug" href="/tools/mcp">
+    Connect external Model Context Protocol servers
+  </Card>
+  <Card title="Skills marketplace" icon="store" href="/tools/skills">
+    Discover and install skills from the ClawHub registry
+  </Card>
+  <Card title="Docker deployment" icon="docker" href="/deployment/docker">
+    Run Operator OS fully containerized
+  </Card>
+</CardGroup>

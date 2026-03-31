@@ -1,0 +1,201 @@
+---
+title: "operator status"
+description: "Display the current configuration, provider key status, and authentication state."
+---
+
+## Synopsis
+
+```bash
+operator status
+operator s
+```
+
+## Description
+
+`operator status` prints a summary of the current Operator installation without starting the agent or the gateway. Use it to verify that your configuration file exists, your workspace is set up, and the correct provider keys or OAuth credentials are in place before running `operator agent` or `operator gateway`.
+
+The output includes:
+
+- Operator version and build information
+- Config file path and whether it exists
+- Workspace path and whether it exists
+- Active default model name
+- Each supported provider — whether an API key is configured
+- OAuth/token sessions from `~/.operator/auth.json` (if any)
+
+### Provider key detection
+
+The `status` command checks whether each provider entry has an API key or API base set in `config.json`. It does **not** make network requests or validate the key — it only checks that the field is non-empty.
+
+## Options
+
+`operator status` accepts no flags.
+
+## Examples
+
+**Check status with a fully configured installation:**
+
+```bash
+operator status
+```
+
+```
+🕸️ operator Status
+Version: 1.4.0 (git: a3f2c91)
+Build: 2026-03-15T10:22:00Z
+
+Config: /home/alice/.operator/config.json ✓
+Workspace: /home/alice/.operator/workspace ✓
+Model: gemini-flash
+OpenRouter API: not set
+Anthropic API: not set
+OpenAI API: not set
+Gemini API: not set
+Zhipu API: not set
+Qwen API: not set
+Groq API: not set
+Moonshot API: not set
+DeepSeek API: not set
+VolcEngine API: not set
+Nvidia API: not set
+vLLM/Local: not set
+Ollama: not set
+
+OAuth/Token Auth:
+  google-antigravity (oauth): authenticated
+```
+
+**Status after setting an OpenRouter key:**
+
+```bash
+operator status
+```
+
+```
+🕸️ operator Status
+Version: 1.4.0
+
+Config: /home/alice/.operator/config.json ✓
+Workspace: /home/alice/.operator/workspace ✓
+Model: gpt4
+OpenRouter API: ✓
+Anthropic API: not set
+OpenAI API: not set
+...
+```
+
+**Status when config file is missing:**
+
+```bash
+operator status
+```
+
+```
+Error loading config: open /home/alice/.operator/config.json: no such file or directory
+```
+
+Run `operator onboard` to create the config file.
+
+## operator version
+
+The `operator version` command (alias: `v`) prints version and build information and then exits. It does not load the config file.
+
+```bash
+operator version
+operator v
+```
+
+```
+🕸️ operator 1.4.0 (git: a3f2c91)
+  Build: 2026-03-15T10:22:00Z
+  Go: go1.22.2
+```
+
+`operator status` includes this same version information at the top of its output, so you can use either command to check the installed version.
+
+## Providers checked
+
+The following providers are checked for configured credentials:
+
+| Provider | What is checked |
+|---|---|
+| OpenRouter | `providers.openrouter.api_key` |
+| Anthropic | `providers.anthropic.api_key` |
+| OpenAI | `providers.openai.api_key` |
+| Gemini | `providers.gemini.api_key` |
+| Zhipu | `providers.zhipu.api_key` |
+| Qwen | `providers.qwen.api_key` |
+| Groq | `providers.groq.api_key` |
+| Moonshot | `providers.moonshot.api_key` |
+| DeepSeek | `providers.deepseek.api_key` |
+| VolcEngine | `providers.volcengine.api_key` |
+| Nvidia | `providers.nvidia.api_key` |
+| vLLM / Local | `providers.vllm.api_base` |
+| Ollama | `providers.ollama.api_base` |
+
+<Note>
+  The `model_list` array is the recommended way to configure providers. The legacy `providers` block is still checked by `operator status` for backward compatibility, but new installations should use `model_list` exclusively.
+</Note>
+
+## operator migrate
+
+`operator migrate` migrates configuration and workspace files from a previous installation (such as OpenClaw) to Operator OS.
+
+```bash
+operator migrate [flags]
+```
+
+<ParamField query="--from" type="string" default="openclaw">
+  Source to migrate from. Currently supports `openclaw`.
+</ParamField>
+
+<ParamField query="--dry-run" type="boolean" default="false">
+  Show what would be migrated without making any changes.
+</ParamField>
+
+<ParamField query="--refresh" type="boolean" default="false">
+  Re-sync workspace files from the source. Use this to pull in new files added after a previous migration.
+</ParamField>
+
+<ParamField query="--config-only" type="boolean" default="false">
+  Only migrate the configuration file; skip workspace files.
+</ParamField>
+
+<ParamField query="--workspace-only" type="boolean" default="false">
+  Only migrate workspace files; skip the configuration file.
+</ParamField>
+
+<ParamField query="--force" type="boolean" default="false">
+  Skip confirmation prompts.
+</ParamField>
+
+<ParamField query="--source-home" type="string">
+  Override the source home directory. Defaults to `~/.openclaw`.
+</ParamField>
+
+<ParamField query="--target-home" type="string">
+  Override the target home directory. Defaults to `~/.operator`.
+</ParamField>
+
+**Examples:**
+
+```bash
+# Migrate from OpenClaw with confirmation prompts
+operator migrate
+
+# Preview what would be migrated (no changes made)
+operator migrate --dry-run
+
+# Re-sync workspace files after a previous migration
+operator migrate --refresh
+
+# Migrate without any prompts
+operator migrate --force
+```
+
+## Related commands
+
+- [`operator onboard`](/reference/cli/onboard) — create the config file if it does not exist
+- [`operator auth status`](/reference/cli/auth) — detailed view of OAuth/token credential state per provider
+- [`operator gateway`](/reference/cli/gateway) — start the gateway once status confirms config is correct
+- [`operator agent`](/reference/cli/agent) — run the agent interactively

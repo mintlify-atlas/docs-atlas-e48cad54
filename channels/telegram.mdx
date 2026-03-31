@@ -1,0 +1,126 @@
+---
+title: "Telegram"
+description: "Connect your Operator OS agent to Telegram using long-polling — no server exposure required."
+---
+
+Operator connects to Telegram using **long-polling** via the Telegram Bot API. The bot opens persistent update requests to Telegram's servers — no public webhook is needed. This makes Telegram the easiest channel to get running behind a firewall or NAT.
+
+The channel supports:
+- Text messages in private chats and group chats
+- Photos, voice messages, audio files, and documents (downloaded and forwarded to the agent)
+- Typing indicator (refreshed every 4 seconds while the agent is thinking)
+- Placeholder message ("Thinking... 💭") edited in-place with the final response when enabled
+- Bot commands: `/start`, `/help`, `/show`, `/list`
+- `@mention` detection in group chats
+- HTTP/HTTPS proxy support
+
+## Setup
+
+<Steps>
+  <Step title="Create a bot with BotFather">
+    Open Telegram and search for `@BotFather`. Start a conversation and send:
+
+    ```
+    /newbot
+    ```
+
+    Follow the prompts to choose a name and username for your bot. BotFather will reply with an **HTTP API token** that looks like:
+
+    ```
+    123456789:ABCdefGHIjklMNOpqrsTUVwxyz
+    ```
+
+    Copy this token.
+  </Step>
+  <Step title="Get your Telegram user ID">
+    To restrict the bot to yourself, you need your numeric Telegram user ID. The easiest way is to message `@userinfobot` — it will reply with your ID.
+
+    Alternatively, message `@RawDataBot` and it will show your full user object including the `id` field.
+  </Step>
+  <Step title="Configure Operator">
+    Add the following to your `config.json`:
+
+    ```json
+    {
+      "channels": {
+        "telegram": {
+          "enabled": true,
+          "token": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
+          "base_url": "",
+          "proxy": "",
+          "allow_from": ["123456789"],
+          "reasoning_channel_id": ""
+        }
+      }
+    }
+    ```
+
+    Replace `123456789` in `allow_from` with your actual Telegram user ID.
+  </Step>
+  <Step title="Start the gateway">
+    Start Operator. The bot will connect via long-polling and log its username. You can now send it a message in Telegram.
+  </Step>
+</Steps>
+
+## Configuration reference
+
+<ParamField body="enabled" type="boolean" required>
+  Set to `true` to activate the Telegram channel.
+</ParamField>
+
+<ParamField body="token" type="string" required>
+  The Bot API token provided by `@BotFather`. Format: `{bot_id}:{secret}`.
+</ParamField>
+
+<ParamField body="base_url" type="string">
+  Custom Telegram Bot API server URL. Leave empty to use the official `https://api.telegram.org`. Only set this if you are running a [local Bot API server](https://core.telegram.org/bots/api#using-a-local-bot-api-server) for larger file downloads or higher rate limits.
+</ParamField>
+
+<ParamField body="proxy" type="string">
+  HTTP or HTTPS proxy URL for the Telegram API connection. Useful in regions where Telegram is blocked. Example: `http://127.0.0.1:7890`. If left empty, the `HTTP_PROXY` / `HTTPS_PROXY` environment variables are used if set.
+</ParamField>
+
+<ParamField body="allow_from" type="array of strings">
+  Numeric Telegram user IDs (as strings) allowed to message the agent. Example: `["123456789"]`. Find your ID via `@userinfobot`.
+
+  Leave empty to allow any user. See [Common configuration fields](/channels/overview#common-configuration-fields) for all supported formats.
+</ParamField>
+
+<ParamField body="reasoning_channel_id" type="string">
+  A numeric chat ID (as a string) where agent reasoning traces are forwarded. Leave empty to disable. See [Messaging channels](/channels/overview#common-configuration-fields) for details.
+</ParamField>
+
+## Group chats
+
+Add the bot to a group. By default, the bot responds to all messages in the group. To restrict it to `@mention`-only responses, configure `group_trigger`:
+
+```json
+"group_trigger": {
+  "mention_only": true
+}
+```
+
+When `mention_only` is `true`, the bot only responds when `@YourBot` appears in the message. The mention text is stripped from the content before passing it to the agent.
+
+## Proxy configuration
+
+If Telegram is blocked in your network, set the `proxy` field:
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "token": "YOUR_TOKEN",
+      "proxy": "http://127.0.0.1:7890",
+      "allow_from": ["YOUR_USER_ID"]
+    }
+  }
+}
+```
+
+Both HTTP and SOCKS5 proxy URLs are accepted. The proxy is applied to both the polling requests and media downloads.
+
+<Tip>
+  Telegram's message length limit is 4096 characters. Operator automatically splits longer responses into multiple messages while preserving code block boundaries.
+</Tip>

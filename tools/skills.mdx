@@ -1,0 +1,198 @@
+---
+title: "Skills"
+description: "Extend your agent with installable capability packages from ClawHub or your own private registry."
+---
+
+Skills are installable packages that give an Operator OS agent new capabilities. A skill is a self-contained bundle — prompt fragments, tool definitions, reference documents, or any combination — that the agent loads at startup and uses automatically.
+
+Where MCP connects to external servers, Skills are installed locally into the agent's workspace and travel with it. They are the recommended way to share reusable agent behaviors across deployments.
+
+---
+
+## ClawHub registry
+
+[ClawHub](https://clawhub.ai) is the default skills marketplace for Operator OS. It hosts community-contributed and officially-maintained skill packages indexed by capability.
+
+The ClawHub registry is enabled by default. No API key is required to search or install public skills.
+
+---
+
+## Discovering and installing a skill
+
+<Steps>
+  <Step title="Search for a skill">
+    Use the CLI to find skills matching a capability you need:
+
+    ```bash
+    operator skills search "github integration"
+    ```
+
+    The command fans out the query to all configured registries, merges results ranked by relevance score, and prints a table of matching slugs, display names, summaries, and versions.
+
+    The agent can also search autonomously using the built-in `find_skills` tool:
+
+    ```
+    find_skills(query="github integration", limit=5)
+    ```
+  </Step>
+
+  <Step title="Review the skill details">
+    Note the slug from the search results. You can inspect the skill's summary and version in the search output before committing to installation.
+  </Step>
+
+  <Step title="Install the skill">
+    Install the skill into the current workspace:
+
+    ```bash
+    operator skills install <slug>
+    ```
+
+    For example:
+
+    ```bash
+    operator skills install github
+    ```
+
+    To pin a specific version:
+
+    ```bash
+    operator skills install github --version 1.2.0
+    ```
+
+    The agent can also install skills autonomously using the `install_skill` tool:
+
+    ```
+    install_skill(slug="github", registry="clawhub")
+    ```
+  </Step>
+
+  <Step title="Restart the agent">
+    Skills are loaded at agent startup. Restart the agent process for a newly installed skill to take effect.
+
+    ```bash
+    operator restart
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Where skills are stored
+
+Skills are installed into the `skills/` subdirectory of the agent's workspace:
+
+```
+{workspace}/
+└── skills/
+    ├── github/
+    │   └── SKILL.md
+    ├── docker-compose/
+    │   └── SKILL.md
+    └── postgres/
+        └── SKILL.md
+```
+
+Each skill lives in its own directory named by slug. The primary file is `SKILL.md`, which contains the skill's instructions, tool definitions, and any supporting content the agent needs.
+
+<Tip>
+  Because skills are stored in the workspace directory, they are portable. Moving or syncing the workspace to another machine carries all installed skills with it.
+</Tip>
+
+---
+
+## Registry configuration
+
+Registry settings live under `tools.skills.registries` in `config.json`.
+
+```json
+{
+  "tools": {
+    "skills": {
+      "registries": {
+        "clawhub": {
+          "enabled": true,
+          "base_url": "https://clawhub.ai",
+          "search_path": "/api/v1/search",
+          "skills_path": "/api/v1/skills",
+          "download_path": "/api/v1/download"
+        }
+      }
+    }
+  }
+}
+```
+
+### ClawHub fields
+
+<ParamField body="registries.clawhub.enabled" type="boolean" default="true">
+  Enable or disable the ClawHub registry. When `false`, ClawHub is not queried during search or install.
+</ParamField>
+
+<ParamField body="registries.clawhub.base_url" type="string" default="https://clawhub.ai">
+  Base URL of the ClawHub instance. Override this if you are running a self-hosted ClawHub mirror.
+</ParamField>
+
+<ParamField body="registries.clawhub.search_path" type="string" default="/api/v1/search">
+  API path used for skill search queries.
+</ParamField>
+
+<ParamField body="registries.clawhub.skills_path" type="string" default="/api/v1/skills">
+  API path used to fetch metadata for a specific skill by slug.
+</ParamField>
+
+<ParamField body="registries.clawhub.download_path" type="string" default="/api/v1/download">
+  API path used to download skill archives during installation.
+</ParamField>
+
+---
+
+## Custom registry
+
+You can point Operator OS at any registry that implements the ClawHub API contract. This is useful for:
+
+- Private internal skill libraries
+- Air-gapped deployments that cannot reach the public internet
+- Testing a self-hosted ClawHub instance
+
+Add a second registry key alongside `clawhub`:
+
+```json
+{
+  "tools": {
+    "skills": {
+      "registries": {
+        "clawhub": {
+          "enabled": true,
+          "base_url": "https://clawhub.ai",
+          "search_path": "/api/v1/search",
+          "skills_path": "/api/v1/skills",
+          "download_path": "/api/v1/download"
+        },
+        "internal": {
+          "enabled": true,
+          "base_url": "https://skills.corp.example.com",
+          "search_path": "/api/v1/search",
+          "skills_path": "/api/v1/skills",
+          "download_path": "/api/v1/download"
+        }
+      }
+    }
+  }
+}
+```
+
+When multiple registries are enabled, search requests are fanned out concurrently (up to 2 at a time by default) and results are merged and ranked by score before being returned. Install requests are routed to the registry specified by the `registry` argument of `install_skill`.
+
+<Note>
+  The custom registry must implement the same REST API paths as ClawHub. There is currently no additional authentication mechanism beyond what you can control at the `base_url` level (e.g. a reverse proxy with basic auth).
+</Note>
+
+---
+
+## How the agent uses skills
+
+After installation, skills are loaded when the agent starts. The agent reads each `SKILL.md` file found in `{workspace}/skills/*/` and incorporates its content — additional instructions, tool descriptions, reference data — into its context.
+
+If a skill contributes tool definitions, those tools are registered alongside the built-in tools and become available to the agent immediately.
+
+The agent can also discover and install skills on its own during a conversation. When a user asks it to perform a task it does not currently know how to do, it may call `find_skills` to search for relevant skills and then `install_skill` to extend its own capabilities.

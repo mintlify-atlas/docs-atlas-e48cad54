@@ -1,0 +1,391 @@
+---
+title: "Other channels"
+description: "Configuration reference for DingTalk, Feishu, LINE, QQ, OneBot, WeCom (Bot, App, AI Bot), and the Standard WebSocket API."
+---
+
+Operator supports additional messaging platforms beyond the primary four. Each channel is configured in the same `channels` block in `config.json`.
+
+<AccordionGroup>
+  <Accordion title="DingTalk" id="dingtalk">
+    DingTalk (钉钉) is a widely-used enterprise communication platform by Alibaba. Operator integrates via the **DingTalk Stream Mode SDK**, which opens a persistent outbound connection — no public webhook URL is required.
+
+    Responses are sent as Markdown cards using the session webhook provided with each inbound message. The channel supports both private (1-on-1) and group conversations.
+
+    **Group chats:** Configure `group_trigger` to control when the bot responds. By default it responds to all messages; set `mention_only` to require an @mention.
+
+    **Setup:**
+    1. Go to the [DingTalk Open Platform](https://open.dingtalk.com/) and log in with your enterprise account.
+    2. Create an **Internal Enterprise Application**.
+    3. Under **App Credentials**, copy the **Client ID** (AppKey) and **Client Secret** (AppSecret).
+    4. Under **Add Capabilities**, add the **Bot** capability.
+    5. Configure the bot's messaging scope as needed, then publish the app.
+
+    ```json
+    {
+      "channels": {
+        "dingtalk": {
+          "enabled": true,
+          "client_id": "YOUR_CLIENT_ID",
+          "client_secret": "YOUR_CLIENT_SECRET",
+          "allow_from": [],
+          "reasoning_channel_id": ""
+        }
+      }
+    }
+    ```
+
+    | Field | Type | Required | Description |
+    |---|---|---|---|
+    | `enabled` | boolean | Yes | Activate the DingTalk channel |
+    | `client_id` | string | Yes | DingTalk App Client ID (AppKey) |
+    | `client_secret` | string | Yes | DingTalk App Client Secret (AppSecret) |
+    | `allow_from` | array | No | Sender IDs allowed to message the agent |
+    | `reasoning_channel_id` | string | No | Chat ID for routing reasoning traces |
+
+    <Note>
+      DingTalk's message length limit is 20,000 characters. Operator splits longer responses automatically.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Feishu / Lark" id="feishu">
+    Feishu (飞书, also marketed as Lark internationally) is an enterprise collaboration suite by ByteDance. Operator connects via the **Feishu WebSocket SDK**, receiving events over a persistent connection without requiring a public webhook endpoint.
+
+    Responses are sent as **Interactive Card JSON 2.0** with a `markdown` element, supporting full CommonMark syntax including code blocks, tables, and inline formatting.
+
+    **Setup:**
+    1. Go to the [Feishu Developer Console](https://open.feishu.cn/app/) and create a **Custom App**.
+    2. Under **Credentials and Basic Info**, copy the **App ID** (starts with `cli_`) and **App Secret**.
+    3. Under **Permissions & Scopes**, grant:
+       - `im:message` (receive/send messages)
+       - `im:message.group_at_msg` (receive @mentions in groups)
+    4. Under **Event Subscriptions**, switch the receive method to **Using persistent connection** (WebSocket mode).
+    5. Create an app version and publish it to your workspace.
+
+    ```json
+    {
+      "channels": {
+        "feishu": {
+          "enabled": true,
+          "app_id": "cli_xxxxxxxxxxxx",
+          "app_secret": "YOUR_APP_SECRET",
+          "encrypt_key": "",
+          "verification_token": "",
+          "allow_from": [],
+          "reasoning_channel_id": ""
+        }
+      }
+    }
+    ```
+
+    | Field | Type | Required | Description |
+    |---|---|---|---|
+    | `enabled` | boolean | Yes | Activate the Feishu channel |
+    | `app_id` | string | Yes | Feishu App ID (starts with `cli_`) |
+    | `app_secret` | string | Yes | Feishu App Secret |
+    | `encrypt_key` | string | No | Encryption key if message encryption is enabled |
+    | `verification_token` | string | No | Verification token for webhook validation |
+    | `allow_from` | array | No | Feishu user open IDs allowed to message the agent |
+    | `reasoning_channel_id` | string | No | Chat ID for routing reasoning traces |
+
+    <Note>
+      Feishu has two build variants (`feishu_32.go` / `feishu_64.go`) selected at compile time based on the target architecture. The functionality is identical.
+    </Note>
+  </Accordion>
+
+  <Accordion title="LINE" id="line">
+    LINE is a dominant messaging app in Japan, Taiwan, and Southeast Asia. Operator uses the **LINE Messaging API** with a webhook for receiving messages and the Reply/Push APIs for sending.
+
+    When a message arrives, Operator stores the **reply token** (valid ~25 seconds) and uses the free Reply API for fast responses. If the agent takes longer, it falls back to the Push API automatically.
+
+    The channel also implements `StartTyping` via LINE's **loading animation**, which is shown in 1-on-1 chats while the agent processes. Group and room chats do not support the loading animation.
+
+    **Setup:**
+    1. Go to the [LINE Developers Console](https://developers.line.biz/) and create a **Provider**.
+    2. Create a **Messaging API** channel under the provider.
+    3. Under **Basic settings**, copy your **Channel Secret**.
+    4. Under **Messaging API**, generate a **Channel Access Token** (long-lived).
+    5. Set your **Webhook URL** to `https://your-server/webhook/line` and enable **Use webhook**.
+    6. Operator must be reachable over HTTPS for LINE to deliver webhooks (use Cloudflare Tunnel, ngrok, or a reverse proxy).
+
+    ```json
+    {
+      "channels": {
+        "line": {
+          "enabled": true,
+          "channel_secret": "YOUR_CHANNEL_SECRET",
+          "channel_access_token": "YOUR_CHANNEL_ACCESS_TOKEN",
+          "webhook_path": "/webhook/line",
+          "allow_from": [],
+          "reasoning_channel_id": ""
+        }
+      }
+    }
+    ```
+
+    | Field | Type | Required | Description |
+    |---|---|---|---|
+    | `enabled` | boolean | Yes | Activate the LINE channel |
+    | `channel_secret` | string | Yes | LINE Channel Secret for webhook signature verification |
+    | `channel_access_token` | string | Yes | Long-lived Channel Access Token for API calls |
+    | `webhook_path` | string | No | Webhook path on the Operator HTTP server (default: `/webhook/line`) |
+    | `allow_from` | array | No | LINE user IDs allowed to message the agent |
+    | `reasoning_channel_id` | string | No | Chat ID for routing reasoning traces |
+
+    <Note>
+      LINE's message length limit is 5,000 characters. Sending media files requires a publicly accessible URL; the current implementation sends the filename/caption as text for locally generated files.
+    </Note>
+  </Accordion>
+
+  <Accordion title="QQ" id="qq">
+    The QQ channel integrates with the **Tencent QQ Open Platform** using the official `botgo` SDK over WebSocket. The bot connects to QQ's gateway and receives events for C2C (user-to-bot) messages and group @mentions.
+
+    **Note:** QQ's open platform requires bot applications to go through a developer verification process. Group messages only trigger the agent when the bot is @mentioned.
+
+    **Setup:**
+    1. Go to the [QQ Open Platform](https://q.qq.com/#/) and register a developer account.
+    2. Create a **QQ Bot** application and complete the identity verification.
+    3. Copy the **App ID** and **App Secret** from the application dashboard.
+    4. Invite the bot to a group or use the C2C interface for direct messages.
+
+    ```json
+    {
+      "channels": {
+        "qq": {
+          "enabled": true,
+          "app_id": "YOUR_QQ_APP_ID",
+          "app_secret": "YOUR_QQ_APP_SECRET",
+          "allow_from": [],
+          "reasoning_channel_id": ""
+        }
+      }
+    }
+    ```
+
+    | Field | Type | Required | Description |
+    |---|---|---|---|
+    | `enabled` | boolean | Yes | Activate the QQ channel |
+    | `app_id` | string | Yes | App ID from the QQ Open Platform |
+    | `app_secret` | string | Yes | App Secret from the QQ Open Platform |
+    | `allow_from` | array | No | QQ user IDs allowed to message the agent |
+    | `reasoning_channel_id` | string | No | Chat ID for routing reasoning traces |
+
+    <Note>
+      The QQ channel requires `@mention` in group chats to trigger the agent. This is enforced by the QQ platform for bot messages.
+    </Note>
+  </Accordion>
+
+  <Accordion title="OneBot" id="onebot">
+    OneBot is an open chatbot standard (V11) used by QQ protocol bridges such as **go-cqhttp**, **Lagrange**, **NapCatQQ**, and others. Operator connects to the bridge as a **WebSocket client**, receiving events and sending API requests over the same connection.
+
+    The channel supports:
+    - Private messages and group messages
+    - Images, video, audio (`record`), and file downloads from message segments
+    - Emoji reaction (`ReactToMessage`) on group messages using emoji ID 289 (👀 equivalent) while processing
+    - Media sending via the `SendMedia` interface using `file://` local paths
+    - Automatic reconnection at a configurable interval
+
+    **Setup:**
+    1. Deploy a OneBot V11-compatible bridge (go-cqhttp, Lagrange, NapCatQQ, etc.).
+    2. Configure the bridge to expose a **WebSocket Server** (not reverse WebSocket). Example address: `ws://127.0.0.1:3001`.
+    3. If the bridge requires authentication, set `access_token`.
+
+    ```json
+    {
+      "channels": {
+        "onebot": {
+          "enabled": true,
+          "ws_url": "ws://127.0.0.1:3001",
+          "access_token": "",
+          "reconnect_interval": 5,
+          "group_trigger_prefix": [],
+          "allow_from": [],
+          "reasoning_channel_id": ""
+        }
+      }
+    }
+    ```
+
+    | Field | Type | Required | Description |
+    |---|---|---|---|
+    | `enabled` | boolean | Yes | Activate the OneBot channel |
+    | `ws_url` | string | Yes | WebSocket URL of the OneBot V11 server |
+    | `access_token` | string | No | Bearer token for authenticating with the bridge |
+    | `reconnect_interval` | integer | No | Seconds between reconnect attempts when disconnected. Set `0` to disable auto-reconnect (default: `5`) |
+    | `group_trigger_prefix` | array | No | Message prefixes that trigger the bot in group chats (alternative to `mention_only`) |
+    | `allow_from` | array | No | QQ user IDs allowed to message the agent |
+    | `reasoning_channel_id` | string | No | Chat ID for routing reasoning traces |
+
+    <Note>
+      Chat IDs in OneBot use a `group:{id}` or `private:{id}` prefix internally. Replies in group chats automatically include a reply reference to the original message.
+    </Note>
+  </Accordion>
+
+  <Accordion title="WeCom" id="wecom">
+    WeCom (企业微信, Enterprise WeChat) offers three distinct integration modes. All three use webhook-based message delivery and require Operator to be reachable over HTTPS (or HTTP on an internal network) for the WeCom servers to call back.
+
+    Choose the mode that fits your deployment:
+
+    | Mode | Config key | Group support | Proactive messaging | Notes |
+    |---|---|---|---|---|
+    | Group Bot | `wecom` | Yes | Webhook only | Easiest setup |
+    | Custom App | `wecom_app` | No | Yes | Private 1-on-1, full API access |
+    | AI Bot | `wecom_aibot` | Yes | Yes | Official AI integration with streaming |
+
+    ---
+
+    ### WeCom Group Bot (`wecom`)
+
+    The simplest mode. The bot lives in a WeCom group chat. Messages are delivered to Operator via a signed XML webhook, and replies are posted back via the group's webhook URL.
+
+    **Setup:**
+    1. In the **WeCom Admin Console**, go to **Apps → Group Chat Bots → Add Bot**.
+    2. Copy the **Webhook URL** (`https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...`).
+    3. Under the bot's callback settings, generate a **Token** and **EncodingAESKey**.
+    4. Set the callback URL to your Operator webhook endpoint.
+
+    ```json
+    {
+      "channels": {
+        "wecom": {
+          "enabled": true,
+          "token": "YOUR_TOKEN",
+          "encoding_aes_key": "YOUR_43_CHAR_ENCODING_AES_KEY",
+          "webhook_url": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY",
+          "webhook_path": "/webhook/wecom",
+          "allow_from": [],
+          "reply_timeout": 5,
+          "reasoning_channel_id": ""
+        }
+      }
+    }
+    ```
+
+    | Field | Type | Required | Description |
+    |---|---|---|---|
+    | `token` | string | Yes | WeCom callback verification token |
+    | `encoding_aes_key` | string | Yes | 43-character message encryption/decryption key |
+    | `webhook_url` | string | Yes | Group bot webhook send URL from WeCom console |
+    | `webhook_path` | string | No | Local HTTP path to receive events (default: `/webhook/wecom`) |
+    | `allow_from` | array | No | WeCom user IDs allowed to message the agent |
+    | `reply_timeout` | integer | No | Seconds to wait for reply delivery (default: `5`) |
+    | `reasoning_channel_id` | string | No | Chat ID for routing reasoning traces |
+
+    ---
+
+    ### WeCom Custom App (`wecom_app`)
+
+    A self-built (自建) application with full API access. Supports private 1-on-1 messaging with enterprise users and proactive message sending. Requires `corp_id`, `corp_secret`, and `agent_id`.
+
+    **Setup:**
+    1. In the **WeCom Admin Console**, go to **App Management → Create App**.
+    2. Copy the **AgentId** and **Secret** from the app details.
+    3. Under **Receive Message → Set API**, set the callback URL to `http://your-server/webhook/wecom-app`.
+    4. Generate a **Token** and **EncodingAESKey** from the interface.
+    5. Copy your **Corp ID** from **My Company** settings.
+
+    ```json
+    {
+      "channels": {
+        "wecom_app": {
+          "enabled": true,
+          "corp_id": "wwxxxxxxxxxxxxxxxx",
+          "corp_secret": "YOUR_CORP_SECRET",
+          "agent_id": 1000002,
+          "token": "YOUR_TOKEN",
+          "encoding_aes_key": "YOUR_43_CHAR_ENCODING_AES_KEY",
+          "webhook_path": "/webhook/wecom-app",
+          "allow_from": [],
+          "reply_timeout": 5,
+          "reasoning_channel_id": ""
+        }
+      }
+    }
+    ```
+
+    | Field | Type | Required | Description |
+    |---|---|---|---|
+    | `corp_id` | string | Yes | Enterprise ID from WeCom Admin → My Company |
+    | `corp_secret` | string | Yes | App-specific secret key |
+    | `agent_id` | integer | Yes | App internal agent ID |
+    | `token` | string | Yes | API callback verification token |
+    | `encoding_aes_key` | string | Yes | 43-character encryption key |
+    | `webhook_path` | string | No | Local HTTP path to receive events (default: `/webhook/wecom-app`) |
+    | `allow_from` | array | No | WeCom user IDs allowed to message the agent |
+    | `reply_timeout` | integer | No | Seconds to wait for reply delivery (default: `5`) |
+
+    ---
+
+    ### WeCom AI Bot (`wecom_aibot`)
+
+    The official **WeCom AI Bot** (智能机器人) integration. Supports streaming responses via a pull protocol that sidesteps the standard 5-second webhook reply deadline. If the agent's response takes longer than ~30 seconds, Operator automatically switches from the streaming push channel to an asynchronous `response_url` delivery.
+
+    **Setup:**
+    1. In the **WeCom Admin Console**, go to **App Management → AI Bot**.
+    2. Configure the callback URL: `http://your-server/webhook/wecom-aibot`.
+    3. Copy the **Token** and click **Random Generate** for the **EncodingAESKey**.
+
+    ```json
+    {
+      "channels": {
+        "wecom_aibot": {
+          "enabled": true,
+          "token": "YOUR_VERIFICATION_TOKEN",
+          "encoding_aes_key": "YOUR_43_CHAR_ENCODING_AES_KEY",
+          "webhook_path": "/webhook/wecom-aibot",
+          "max_steps": 10,
+          "welcome_message": "Hello! I'm your AI assistant. How can I help you today?",
+          "reasoning_channel_id": ""
+        }
+      }
+    }
+    ```
+
+    | Field | Type | Required | Description |
+    |---|---|---|---|
+    | `token` | string | Yes | App callback verification token |
+    | `encoding_aes_key` | string | Yes | 43-character symmetric encryption key |
+    | `webhook_path` | string | No | Local HTTP path (default: `/webhook/wecom-aibot`) |
+    | `max_steps` | integer | No | Maximum agent tool-use iterations per message (default: `10`) |
+    | `welcome_message` | string | No | Greeting sent automatically when a new chat opens |
+    | `reasoning_channel_id` | string | No | Chat ID for routing reasoning traces |
+
+    <Tip>
+      All three WeCom modes implement `WebhookHandler` and `HealthChecker`. Health check endpoints are available at `/health/wecom`, `/health/wecom-app`, and `/health/wecom-aibot` respectively.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="Standard (WebSocket API)" id="standard">
+    The `standard` channel exposes a local WebSocket endpoint that any external client can connect to. This is useful for custom integrations, testing, or embedding the agent in your own application.
+
+    The gateway listens for WebSocket connections on the configured `gateway.host:gateway.port`. Clients authenticate using the `token` value either via the `Authorization: Bearer <token>` header or (if `allow_token_query` is true) the `?token=` query parameter.
+
+    ```json
+    {
+      "channels": {
+        "standard": {
+          "enabled": true,
+          "token": "YOUR_SECRET_TOKEN",
+          "allow_token_query": false,
+          "allow_origins": [],
+          "ping_interval": 30,
+          "read_timeout": 60,
+          "write_timeout": 10,
+          "max_connections": 100,
+          "allow_from": []
+        }
+      }
+    }
+    ```
+
+    | Field | Type | Default | Description |
+    |---|---|---|---|
+    | `token` | string | — | Secret token clients must present to authenticate |
+    | `allow_token_query` | boolean | `false` | Allow passing token via `?token=` query parameter |
+    | `allow_origins` | array | `[]` | CORS allowed origins. Empty allows all. |
+    | `ping_interval` | integer | `30` | WebSocket ping interval in seconds |
+    | `read_timeout` | integer | `60` | Read timeout in seconds |
+    | `write_timeout` | integer | `10` | Write timeout in seconds |
+    | `max_connections` | integer | `100` | Maximum simultaneous connections |
+    | `allow_from` | array | `[]` | Restrict to specific client identifiers |
+  </Accordion>
+</AccordionGroup>

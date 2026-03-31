@@ -1,0 +1,284 @@
+---
+title: "Security & sandboxing"
+description: "Operator OS includes several layers of security: workspace confinement, shell command filtering, and channel-level access control. This page explains each mechanism and how to configure it."
+---
+
+## Workspace confinement
+
+The `restrict_to_workspace` flag is the primary sandbox boundary. When enabled
+(the default), the agent cannot read files, write files, or execute shell
+commands that reference paths outside the configured `workspace` directory.
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "workspace": "~/.operator/workspace",
+      "restrict_to_workspace": true
+    }
+  }
+}
+```
+
+### What workspace restriction blocks
+
+- **File reads** to absolute paths outside the workspace directory
+- **File writes** to any path outside the workspace directory
+- **Shell commands** that reference absolute paths outside the workspace
+- **Path traversal** — any command or path containing `../` or `..\`
+
+### Allowed exceptions
+
+A small set of kernel pseudo-devices are always permitted regardless of
+workspace restriction, because they contain no user data and cannot cause
+destructive writes:
+
+- `/dev/null`
+- `/dev/zero`
+- `/dev/random`
+- `/dev/urandom`
+- `/dev/stdin`
+- `/dev/stdout`
+- `/dev/stderr`
+
+### Selective read access
+
+If the agent needs to read files outside the workspace (for example, a shared
+configuration directory) while still blocking writes and arbitrary execution,
+enable `allow_read_outside_workspace`:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "restrict_to_workspace": true,
+      "allow_read_outside_workspace": true
+    }
+  }
+}
+```
+
+<Warning>
+  Setting `restrict_to_workspace` to `false` removes all filesystem and path
+  restrictions. The agent can read, write, and execute commands anywhere on
+  the host. Only disable workspace restriction in a fully trusted or
+  containerized environment where you control what the agent is asked to do.
+</Warning>
+
+---
+
+## Shell command filtering
+
+The `tools.exec` section controls which shell commands the agent's `exec` tool
+is permitted to run.
+
+```json
+{
+  "tools": {
+    "exec": {
+      "enable_deny_patterns": true,
+      "custom_deny_patterns": []
+    }
+  }
+}
+```
+
+### Default blocked patterns
+
+When `enable_deny_patterns` is `true` (the default), the following regex
+patterns are evaluated against every command before execution. Any match
+causes the command to be rejected with:
+
+```
+Command blocked by safety guard (dangerous pattern detected)
+```
+
+The exact patterns are compiled from `pkg/tools/shell.go`:
+
+| Pattern | What it blocks |
+| --- | --- |
+| `\brm\s+-[rf]{1,2}\b` | `rm -rf`, `rm -r` |
+| `\bdel\s+/[fq]\b` | Windows `del /f`, `del /q` |
+| `\brmdir\s+/s\b` | Windows `rmdir /s` |
+| `\b(format\|mkfs\|diskpart)\b\s` | Disk-wipe commands |
+| `\bdd\s+if=` | `dd` disk imaging |
+| `>\s*/dev/(sd[a-z]\|nvme\d\|mmcblk\d\|...)` | Writes to block devices |
+| `\b(shutdown\|reboot\|poweroff)\b` | System power commands |
+| `:\(\)\s*\{.*\};\s*:` | Fork bomb `:(){ :\|: & };:` |
+| `\$\([^)]+\)` | `$(...)` command substitution |
+| `\$\{[^}]+\}` | `${...}` variable substitution |
+| `` `[^`]+` `` | Backtick command substitution |
+| `\|\s*sh\b` | Pipe to `sh` |
+| `\|\s*bash\b` | Pipe to `bash` |
+| `;\s*rm\s+-[rf]` | Chained `; rm -rf` |
+| `&&\s*rm\s+-[rf]` | Conditional `&& rm -rf` |
+| `\|\|\s*rm\s+-[rf]` | Conditional `\|\| rm -rf` |
+| `<<\s*EOF` | Heredoc injection |
+| `\$\(\s*cat\s+` | `$(cat ...)` substitution |
+| `\$\(\s*curl\s+` | `$(curl ...)` substitution |
+| `\$\(\s*wget\s+` | `$(wget ...)` substitution |
+| `\$\(\s*which\s+` | `$(which ...)` substitution |
+| `\bsudo\b` | Privilege escalation |
+| `\bchmod\s+[0-7]{3,4}\b` | Permission changes |
+| `\bchown\b` | Ownership changes |
+| `\bpkill\b` | Process kill by name |
+| `\bkillall\b` | Kill all matching processes |
+| `\bkill\s+-[9]\b` | Force-kill (`kill -9`) |
+| `\bcurl\b.*\|\s*(sh\|bash)` | `curl ... \| sh` download-and-execute |
+| `\bwget\b.*\|\s*(sh\|bash)` | `wget ... \| sh` download-and-execute |
+| `\bnpm\s+install\s+-g\b` | Global npm installs |
+| `\bpip\s+install\s+--user\b` | User-level pip installs |
+| `\bapt\s+(install\|remove\|purge)\b` | APT package changes |
+| `\byum\s+(install\|remove)\b` | YUM package changes |
+| `\bdnf\s+(install\|remove)\b` | DNF package changes |
+| `\bdocker\s+run\b` | Starting new containers |
+| `\bdocker\s+exec\b` | Exec into running containers |
+| `\bgit\s+push\b` | Git push |
+| `\bgit\s+force\b` | Git force operations |
+| `\bssh\b.*@` | Remote SSH connections |
+| `\beval\b` | Dynamic code evaluation |
+| `\bsource\s+.*\.sh\b` | Sourcing shell scripts |
+
+### Custom deny patterns
+
+Add your own regex patterns to `custom_deny_patterns` to block additional
+commands specific to your environment:
+
+```json
+{
+  "tools": {
+    "exec": {
+      "enable_deny_patterns": true,
+      "custom_deny_patterns": [
+        "\\brm\\s+-r\\b",
+        "\\bkillall\\s+python\\b",
+        "\\bcurl\\b.*internal\\.corp"
+      ]
+    }
+  }
+}
+```
+
+Patterns are Go regular expressions and are matched case-insensitively against
+the full command string. Test your patterns with:
+
+```bash
+echo 'your command here' | grep -iP 'your_pattern'
+```
+
+### Custom allow patterns
+
+`custom_allow_patterns` lets you exempt specific commands from all deny checks.
+A command matching any allow pattern is executed without further filtering:
+
+```json
+{
+  "tools": {
+    "exec": {
+      "enable_deny_patterns": true,
+      "custom_allow_patterns": [
+        "\\bgit\\s+push\\s+origin\\s+main\\b"
+      ]
+    }
+  }
+}
+```
+
+<Warning>
+  Setting `enable_deny_patterns` to `false` disables the entire default
+  blocklist. Operator will print a warning at startup:
+
+  ```
+  Warning: deny patterns are disabled. All commands will be allowed.
+  ```
+
+  Only disable deny patterns if you have an alternative sandboxing mechanism
+  (for example, a container with restricted capabilities or a separate VM).
+  Never disable deny patterns on a shared or internet-facing machine.
+</Warning>
+
+### Environment variable override
+
+```bash
+OPERATOR_TOOLS_EXEC_ENABLE_DENY_PATTERNS=false   # disable all default patterns
+OPERATOR_TOOLS_EXEC_CUSTOM_DENY_PATTERNS='["\\bmy-blocked-cmd\\b"]'
+```
+
+---
+
+## Channel access control
+
+Every messaging channel supports an `allow_from` list. When the list is
+non-empty, only messages from users whose ID appears in the list are processed.
+All other messages are silently ignored.
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "token": "YOUR_BOT_TOKEN",
+      "allow_from": ["123456789"]
+    },
+    "discord": {
+      "enabled": true,
+      "token": "YOUR_DISCORD_TOKEN",
+      "allow_from": ["987654321098765432"]
+    },
+    "slack": {
+      "enabled": true,
+      "bot_token": "xoxb-...",
+      "app_token": "xapp-...",
+      "allow_from": ["U01ABC123DE"]
+    }
+  }
+}
+```
+
+The `allow_from` list accepts both string and numeric IDs. The type that is
+appropriate depends on the channel:
+
+| Channel | ID format |
+| --- | --- |
+| Telegram | Numeric user ID (string or integer) |
+| Discord | Snowflake string |
+| Slack | Member ID string (e.g. `U01ABC123DE`) |
+| WhatsApp | Phone number with country code |
+| QQ | Numeric QQ account number |
+| Feishu / Lark | Open user ID |
+| DingTalk | User staff ID |
+| LINE | User ID string |
+
+<Tip>
+  Leave `allow_from` as an empty array `[]` to accept messages from all users.
+  This is convenient during development but should be restricted before you
+  deploy an agent to a shared channel.
+</Tip>
+
+### Telegram example
+
+Your Telegram user ID can be retrieved by messaging [@userinfobot](https://t.me/userinfobot):
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "token": "YOUR_TELEGRAM_BOT_TOKEN",
+      "allow_from": ["123456789", "987654321"]
+    }
+  }
+}
+```
+
+---
+
+## Summary of security defaults
+
+| Feature | Default | Description |
+| --- | --- | --- |
+| `restrict_to_workspace` | `true` | Agent confined to workspace directory |
+| `allow_read_outside_workspace` | `false` | Reads also confined to workspace |
+| `enable_deny_patterns` | `true` | Default dangerous-command blocklist active |
+| `custom_deny_patterns` | `[]` | No additional patterns by default |
+| `allow_from` (channels) | `[]` | All users accepted (restrict in production) |

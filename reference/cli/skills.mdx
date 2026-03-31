@@ -1,0 +1,299 @@
+---
+title: "operator skills"
+description: "Search, install, list, and remove agent skills from the ClawHub registry or GitHub."
+---
+
+## Synopsis
+
+```bash
+operator skills <subcommand> [args] [flags]
+```
+
+## Description
+
+Skills are Markdown-based instruction sets that extend the agent with domain-specific knowledge and capabilities. They are loaded from the workspace skills directory at agent startup and injected into the agent's context when relevant.
+
+Installed skills are stored in `<workspace>/skills/` (default: `~/.operator/workspace/skills/`). Global skills placed in `~/.operator/skills/` are also available.
+
+The `operator skills` command lets you:
+
+- **Search** the ClawHub registry for community skills
+- **Install** skills from ClawHub or directly from GitHub
+- **List** installed skills
+- **Show** the contents of an installed skill
+- **Remove** installed skills
+- **Install builtin skills** bundled with Operator OS
+- **List builtin skills** available to install locally
+
+## Subcommands
+
+### operator skills search
+
+Search for skills in the configured registry (ClawHub by default).
+
+```bash
+operator skills search [query]
+```
+
+Omitting the query returns all available skills (up to 20 results). The registry URL is configured in `config.json` under `tools.skills.registries.clawhub`.
+
+---
+
+### operator skills install
+
+Install a skill from GitHub or a named registry.
+
+```bash
+# Install directly from a GitHub repository path
+operator skills install <owner/repo/path>
+
+# Install from a named registry (e.g. clawhub)
+operator skills install --registry <registry-name> <slug>
+```
+
+<ParamField query="--registry" type="string">
+  Install from a named registry. When set, two arguments are required: `<registry-name>` and `<slug>`.
+</ParamField>
+
+GitHub installs fetch directly from the repository using the HTTPS API. Registry installs use the configured `download_path` on the registry server and include malware scanning.
+
+<Warning>
+  Skills installed from ClawHub are checked against a malware blocklist. Skills flagged as malicious are refused. Skills flagged as suspicious will install with a warning — review their contents before use.
+</Warning>
+
+---
+
+### operator skills list
+
+List all skills installed in the current workspace and global skills directory.
+
+```bash
+operator skills list
+```
+
+---
+
+### operator skills show
+
+Print the full contents of an installed skill.
+
+```bash
+operator skills show <skill-name>
+```
+
+---
+
+### operator skills remove
+
+Remove an installed skill by name.
+
+```bash
+operator skills remove <skill-name>
+operator skills rm <skill-name>
+operator skills uninstall <skill-name>
+```
+
+---
+
+### operator skills install-builtin
+
+Copy the builtin skills (`weather`, `news`, `stock`, `calculator`) that ship with Operator OS into the workspace skills directory.
+
+```bash
+operator skills install-builtin
+```
+
+---
+
+### operator skills list-builtin
+
+List the builtin skills available on disk inside the Operator installation.
+
+```bash
+operator skills list-builtin
+```
+
+## Examples
+
+**Search for all available skills:**
+
+```bash
+operator skills search
+```
+
+```
+Searching for available skills...
+
+Available Skills (8):
+--------------------
+  📦 Weather
+     Get current weather and forecasts for any location
+     Slug: weather
+     Registry: clawhub
+     Version: 1.2.0
+
+  📦 News Briefing
+     Fetch and summarise top news headlines
+     Slug: news
+     Registry: clawhub
+     Version: 1.0.3
+
+  📦 Stock Prices
+     Look up stock prices and market data
+     Slug: stock
+     Registry: clawhub
+     Version: 0.9.1
+```
+
+**Search for a specific skill:**
+
+```bash
+operator skills search weather
+```
+
+```
+Searching for available skills...
+
+Available Skills (1):
+--------------------
+  📦 Weather
+     Get current weather and forecasts for any location
+     Slug: weather
+     Registry: clawhub
+     Version: 1.2.0
+```
+
+**Install a skill from ClawHub:**
+
+```bash
+operator skills install --registry clawhub weather
+```
+
+```
+Installing skill 'weather' from clawhub registry...
+✓ Skill 'weather' v1.2.0 installed successfully!
+  Get current weather and forecasts for any location
+```
+
+**Install a skill directly from GitHub:**
+
+```bash
+operator skills install standardws/operator-skills/weather
+```
+
+```
+Installing skill from standardws/operator-skills/weather...
+✓ Skill 'weather' installed successfully!
+```
+
+**List installed skills:**
+
+```bash
+operator skills list
+```
+
+```
+Installed Skills:
+------------------
+  ✓ weather (clawhub)
+    Get current weather and forecasts for any location
+  ✓ news (clawhub)
+    Fetch and summarise top news headlines
+  ✓ my-custom-skill (workspace)
+```
+
+**Show skill details:**
+
+```bash
+operator skills show weather
+```
+
+```
+📦 Skill: weather
+----------------------
+# Weather Skill
+
+Use this skill when the user asks about current weather...
+```
+
+**Remove a skill:**
+
+```bash
+operator skills remove weather
+```
+
+```
+Removing skill 'weather'...
+✓ Skill 'weather' removed successfully!
+```
+
+**Install all builtin skills:**
+
+```bash
+operator skills install-builtin
+```
+
+```
+Copying builtin skills to workspace...
+
+✓ All builtin skills installed!
+Now you can use them in your workspace.
+```
+
+**List available builtin skills:**
+
+```bash
+operator skills list-builtin
+```
+
+```
+Available Builtin Skills:
+-----------------------
+  ✓  weather
+  ✓  news
+  ✓  stock
+  ✓  calculator
+```
+
+## Skill directory layout
+
+Skills are loaded from three locations in priority order:
+
+1. `<workspace>/skills/` — workspace-local skills
+2. `~/.operator/skills/` — global user skills
+3. `~/.operator/operator/skills/` — builtin skills installed with Operator OS
+
+A skill is a directory containing a `SKILL.md` file. The agent reads this file to understand the skill's capabilities and instructions.
+
+```
+~/.operator/workspace/skills/
+└── weather/
+    └── SKILL.md
+```
+
+## Registry configuration
+
+The ClawHub registry is configured in `config.json`:
+
+```json
+{
+  "tools": {
+    "skills": {
+      "registries": {
+        "clawhub": {
+          "enabled": true,
+          "base_url": "https://clawhub.ai",
+          "search_path": "/api/v1/search",
+          "skills_path": "/api/v1/skills",
+          "download_path": "/api/v1/download"
+        }
+      }
+    }
+  }
+}
+```
+
+## Related commands
+
+- [`operator agent`](/reference/cli/agent) — the agent loads installed skills at startup
+- [`operator onboard`](/reference/cli/onboard) — sets up the workspace directory where skills are stored

@@ -1,0 +1,278 @@
+---
+title: "Docker deployment"
+description: "Run Operator OS fully containerized — no local Go installation required. Covers quick start with Docker Compose, the gateway profile, volume mounts, and environment variable overrides."
+---
+
+Docker is the fastest way to get Operator OS running in production without installing Go or compiling from source. The official image is built on Alpine Linux and ships as a single ~10 MB layer.
+
+<Note>
+  The official image is published to both Docker Hub (`standardws/operator:latest`) and GitHub Container Registry (`ghcr.io/avrilonline/operator:latest`). Both tags are kept in sync on every release.
+</Note>
+
+## Prerequisites
+
+- Docker Engine 24+ or Docker Desktop
+- Docker Compose v2 (`docker compose`, not `docker-compose`)
+- An API key for at least one [supported LLM provider](/configuration/overview)
+
+---
+
+## Quick start
+
+<Steps>
+
+<Step title="Clone the repository">
+
+```bash
+git clone https://github.com/avrilonline/Operator-OS.git
+cd Operator-OS
+```
+
+</Step>
+
+<Step title="Generate the default configuration">
+
+Run the gateway profile once without `-d` to let the entrypoint script create the initial `docker/data/config.json` file and then exit cleanly:
+
+```bash
+docker compose -f docker/docker-compose.yml --profile gateway up
+```
+
+On first run the entrypoint detects that neither a config file nor a workspace directory exists, calls `operator onboard`, writes the default `config.json`, prints a reminder to edit it, and exits. The container stops automatically — this is expected.
+
+</Step>
+
+<Step title="Edit the generated config file">
+
+The config file is written to `docker/data/config.json` (mapped from `/root/.operator` inside the container):
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "claude-4-5-sonnet",
+      "model": "anthropic/claude-4-5-sonnet-20260220",
+      "api_key": "sk-ant-YOUR_KEY_HERE"
+    }
+  ],
+  "agents": {
+    "defaults": {
+      "model": "claude-4-5-sonnet"
+    }
+  },
+  "channels": {
+    "slack": {
+      "enabled": true,
+      "bot_token": "xoxb-YOUR_SLACK_BOT_TOKEN",
+      "app_token": "xapp-YOUR_SLACK_APP_TOKEN"
+    }
+  }
+}
+```
+
+See [Configuration overview](/configuration/overview) for the full schema.
+
+</Step>
+
+<Step title="Start the gateway in the background">
+
+```bash
+docker compose -f docker/docker-compose.yml --profile gateway up -d
+```
+
+The gateway is now running as a daemon. It connects to your configured channels and exposes the health endpoint on port `18790`.
+
+</Step>
+
+<Step title="Verify the gateway is healthy">
+
+```bash
+docker compose -f docker/docker-compose.yml ps
+curl http://localhost:18790/health
+```
+
+A `200 OK` response confirms the gateway is up and connected.
+
+</Step>
+
+</Steps>
+
+---
+
+## Compose profiles
+
+The `docker/docker-compose.yml` file defines two services, each guarded by a profile:
+
+| Profile | Service | Use case |
+|---|---|---|
+| `gateway` | `operator-gateway` | Long-running bot daemon connected to messaging channels |
+| `agent` | `operator-agent` | Interactive one-shot queries from the terminal |
+
+<CodeGroup>
+
+```bash Gateway (daemon)
+# Start in background
+docker compose -f docker/docker-compose.yml --profile gateway up -d
+
+# View logs
+docker compose -f docker/docker-compose.yml logs -f operator-gateway
+
+# Stop
+docker compose -f docker/docker-compose.yml --profile gateway down
+```
+
+```bash Agent (interactive)
+# Run a one-shot query
+docker compose -f docker/docker-compose.yml run --rm operator-agent -m "What is the status of the system?"
+
+# Open an interactive session
+docker compose -f docker/docker-compose.yml run --rm operator-agent
+```
+
+</CodeGroup>
+
+---
+
+## Compose file reference
+
+The minimal `docker/docker-compose.yml` used by quick start:
+
+```yaml
+services:
+  operator-agent:
+    image: docker.io/standardws/operator:latest
+    container_name: operator-agent
+    profiles:
+      - agent
+    volumes:
+      - ./data:/root/.operator
+    entrypoint: ["operator", "agent"]
+    stdin_open: true
+    tty: true
+
+  operator-gateway:
+    image: docker.io/standardws/operator:latest
+    container_name: operator-gateway
+    restart: on-failure
+    profiles:
+      - gateway
+    volumes:
+      - ./data:/root/.operator
+```
+
+### Volume mounts
+
+| Host path | Container path | Purpose |
+|---|---|---|
+| `./data` | `/root/.operator` | Config file, workspace, memory, logs |
+
+The entire `~/.operator` directory is persisted in `./data` on the host. This means your agent's long-term memory, session logs, and configuration survive container restarts and upgrades.
+
+<Warning>
+  If you delete the `./data` directory, the agent loses all persistent memory and you must re-run `operator onboard` to regenerate the config. Back up this directory before upgrading Docker images.
+</Warning>
+
+---
+
+## Full-featured image (MCP support)
+
+For workflows that require MCP (Model Context Protocol) servers — which depend on Node.js — use the `docker-compose.full.yml` variant. This image is larger but supports the full MCP tool ecosystem.
+
+```bash
+# Build the full image locally
+make docker-build-full
+
+# Start the gateway (full)
+docker compose -f docker/docker-compose.full.yml --profile gateway up -d
+
+# Run an interactive agent (full)
+docker compose -f docker/docker-compose.full.yml run --rm operator-agent
+```
+
+The full compose file separates config and workspace into distinct named volumes:
+
+```yaml
+volumes:
+  - ../config/config.json:/root/.operator/config.json:ro  # read-only config
+  - operator-workspace:/root/.operator/workspace           # persistent workspace
+  - operator-npm-cache:/root/.npm                          # npm cache for MCP servers
+```
+
+---
+
+## Environment variable overrides
+
+You can inject provider API keys at runtime without editing `config.json` directly. Copy `.env.example` to `.env` and fill in the values you need:
+
+```bash
+# .env
+ANTHROPIC_API_KEY=sk-ant-xxx
+OPENAI_API_KEY=sk-xxx
+TELEGRAM_BOT_TOKEN=123456:ABC...
+TZ=America/New_York
+```
+
+Then start with the env file:
+
+```bash
+docker compose -f docker/docker-compose.yml --env-file .env --profile gateway up -d
+```
+
+<Tip>
+  Environment variables set at runtime override values in `config.json`. This is useful for CI/CD pipelines and secrets managers where you don't want credentials stored on disk.
+</Tip>
+
+Supported environment variables:
+
+| Variable | Provider |
+|---|---|
+| `OPENROUTER_API_KEY` | OpenRouter |
+| `ANTHROPIC_API_KEY` | Anthropic |
+| `OPENAI_API_KEY` | OpenAI |
+| `GEMINI_API_KEY` | Google Gemini |
+| `ZHIPU_API_KEY` | Zhipu AI |
+| `CEREBRAS_API_KEY` | Cerebras |
+| `TELEGRAM_BOT_TOKEN` | Telegram |
+| `DISCORD_BOT_TOKEN` | Discord |
+| `BRAVE_SEARCH_API_KEY` | Brave Search |
+| `TZ` | Container timezone |
+
+---
+
+## Port mapping
+
+The gateway HTTP server listens on port `18790` inside the container. Docker does not publish this port by default — add a `ports` entry if you need to access the health endpoint or API from the host:
+
+```yaml
+services:
+  operator-gateway:
+    image: docker.io/standardws/operator:latest
+    profiles:
+      - gateway
+    ports:
+      - "18790:18790"
+    volumes:
+      - ./data:/root/.operator
+```
+
+The health check endpoint used by Docker's built-in healthcheck is:
+
+```
+GET http://localhost:18790/health
+```
+
+---
+
+## Building locally
+
+If you want to build the image from source instead of pulling from Docker Hub:
+
+```bash
+# Build the minimal Alpine-based image
+make docker-build
+
+# Or build manually
+docker build -f docker/Dockerfile -t operator:local .
+```
+
+The multistage `docker/Dockerfile` compiles the binary in a `golang:1.25-alpine` builder stage and copies only the resulting binary into the final `alpine:3.23` runtime image, keeping the image footprint minimal.

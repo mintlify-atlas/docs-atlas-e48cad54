@@ -1,0 +1,291 @@
+---
+title: "Model Context Protocol (MCP)"
+description: "Connect Operator OS agents to any MCP-compatible server to unlock external tools, data sources, and services."
+---
+
+[Model Context Protocol](https://modelcontextprotocol.io) (MCP) is an open standard for exposing tools and resources to LLM agents over a well-defined transport. An MCP server can provide tools for querying databases, interacting with APIs, browsing the filesystem, searching code repositories — anything that can be wrapped in a function call.
+
+When you connect an MCP server to Operator OS, every tool that server advertises is automatically registered in the agent's tool registry under the name `mcp_<server>_<tool>`. The agent can then call those tools exactly like any built-in tool, with no extra configuration required in the agent itself.
+
+<Note>
+  Tool names are normalized to `[a-z0-9_-]` and prefixed with the server name to avoid conflicts. If normalization is lossy (e.g. the original name contained special characters), a short hash is appended to keep names unique.
+</Note>
+
+---
+
+## Global configuration
+
+MCP is disabled by default. Enable it and define your servers under `tools.mcp` in `config.json`.
+
+```json
+{
+  "tools": {
+    "mcp": {
+      "enabled": true,
+      "servers": {
+        "my-server": { ... }
+      }
+    }
+  }
+}
+```
+
+<ParamField body="enabled" type="boolean" default="false">
+  Master switch for MCP. When `false`, no MCP servers are started regardless of individual server configs.
+</ParamField>
+
+<ParamField body="servers" type="object" default="{}">
+  A map of server names to server configuration objects. Each key becomes the server identifier used in tool names (`mcp_<key>_<tool>`).
+</ParamField>
+
+---
+
+## Per-server configuration
+
+<ParamField body="enabled" type="boolean" required>
+  Whether this specific server should be started. Set to `false` to temporarily disable a server without removing its config.
+</ParamField>
+
+<ParamField body="type" type="string">
+  Transport type: `stdio`, `sse`, or `http`. If omitted, the transport is auto-detected:
+  - `url` is set → `sse`
+  - `command` is set → `stdio`
+</ParamField>
+
+<ParamField body="command" type="string">
+  The executable to launch for `stdio` transport (e.g. `npx`, `python`, `./my-server`).
+</ParamField>
+
+<ParamField body="args" type="array">
+  Command-line arguments passed to `command` for `stdio` transport.
+</ParamField>
+
+<ParamField body="env" type="object">
+  Environment variables injected into the `stdio` server process. Use this to pass API keys without hard-coding them in `args`.
+</ParamField>
+
+<ParamField body="env_file" type="string">
+  Path to a `.env`-format file whose variables are merged into the `stdio` server's environment. Lines are `KEY=value`; lines starting with `#` are comments.
+</ParamField>
+
+<ParamField body="url" type="string">
+  The endpoint URL for `sse` or `http` transport (e.g. `https://mcp.example.com/mcp`).
+</ParamField>
+
+<ParamField body="headers" type="object">
+  HTTP headers sent with every request to `sse` or `http` servers. Use this to pass `Authorization` tokens or API keys.
+</ParamField>
+
+---
+
+## Transport types
+
+<Tabs>
+  <Tab title="stdio">
+    The server runs as a child process on the same machine. Operator OS spawns the process, communicates over stdin/stdout, and manages its lifecycle.
+
+    This is the most common transport for locally-installed MCP servers distributed as npm packages, Python scripts, or compiled binaries.
+
+    ```json
+    {
+      "tools": {
+        "mcp": {
+          "enabled": true,
+          "servers": {
+            "filesystem": {
+              "enabled": true,
+              "command": "npx",
+              "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+            }
+          }
+        }
+      }
+    }
+    ```
+
+    Use `env` or `env_file` to pass secrets to the subprocess without exposing them in `args`:
+
+    ```json
+    {
+      "github": {
+        "enabled": true,
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-github"],
+        "env": {
+          "GITHUB_PERSONAL_ACCESS_TOKEN": "YOUR_GITHUB_TOKEN"
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="HTTP / SSE">
+    The server runs remotely (or locally as a standalone process) and is accessed over HTTP. Operator OS acts as an HTTP client.
+
+    Use `"type": "sse"` for servers that stream events, or `"type": "http"` for standard request/response. Both use the same `url` and `headers` fields. If `type` is omitted and `url` is set, `sse` is used automatically.
+
+    ```json
+    {
+      "tools": {
+        "mcp": {
+          "enabled": true,
+          "servers": {
+            "context7": {
+              "enabled": true,
+              "type": "http",
+              "url": "https://mcp.context7.com/mcp",
+              "headers": {
+                "CONTEXT7_API_KEY": "ctx7sk-xx"
+              }
+            }
+          }
+        }
+      }
+    }
+    ```
+
+    <Note>
+      `env` and `env_file` are only applied to `stdio` servers. For HTTP/SSE servers, pass credentials via `headers`.
+    </Note>
+  </Tab>
+</Tabs>
+
+---
+
+## Example servers
+
+The following examples are taken directly from `config.example.json`. Copy the relevant block into the `tools.mcp.servers` object in your `config.json`.
+
+<AccordionGroup>
+  <Accordion title="filesystem — local file access via stdio">
+    Gives the agent read/write access to a directory tree via the official MCP filesystem server.
+
+    ```json
+    {
+      "filesystem": {
+        "enabled": true,
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+      }
+    }
+    ```
+
+    Replace `/tmp` with the directory you want the agent to access. You can add multiple paths as additional arguments.
+  </Accordion>
+
+  <Accordion title="context7 — up-to-date library documentation">
+    Fetches current documentation for libraries and frameworks from Context7's hosted MCP endpoint.
+
+    ```json
+    {
+      "context7": {
+        "enabled": true,
+        "type": "http",
+        "url": "https://mcp.context7.com/mcp",
+        "headers": {
+          "CONTEXT7_API_KEY": "ctx7sk-xx"
+        }
+      }
+    }
+    ```
+
+    Obtain an API key at [context7.com](https://context7.com).
+  </Accordion>
+
+  <Accordion title="github — repository and issue management">
+    Exposes GitHub operations (file access, pull requests, issues, search) to the agent.
+
+    ```json
+    {
+      "github": {
+        "enabled": true,
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-github"],
+        "env": {
+          "GITHUB_PERSONAL_ACCESS_TOKEN": "YOUR_GITHUB_TOKEN"
+        }
+      }
+    }
+    ```
+
+    Create a [personal access token](https://github.com/settings/tokens) with the scopes your agent needs (`repo`, `read:org`, etc.).
+  </Accordion>
+
+  <Accordion title="brave-search — Brave web search via MCP">
+    Routes web search requests through the Brave Search API via an MCP wrapper.
+
+    ```json
+    {
+      "brave-search": {
+        "enabled": true,
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+        "env": {
+          "BRAVE_API_KEY": "YOUR_BRAVE_API_KEY"
+        }
+      }
+    }
+    ```
+
+    This is an alternative to the built-in `web_search` tool — useful if you want to route all web search through a single MCP-managed process.
+  </Accordion>
+
+  <Accordion title="postgres — SQL query execution">
+    Lets the agent run read queries against a PostgreSQL database.
+
+    ```json
+    {
+      "postgres": {
+        "enabled": true,
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-postgres",
+          "postgresql://user:password@localhost/dbname"
+        ]
+      }
+    }
+    ```
+
+    Replace the connection string with your database credentials. Grant the database user only the privileges the agent needs.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Using environment variables for secrets
+
+Avoid putting secrets directly in `args` where they may appear in process listings. Use `env` for inline key/value pairs, or `env_file` to point to a file outside the config:
+
+```json
+{
+  "my-server": {
+    "enabled": true,
+    "command": "npx",
+    "args": ["-y", "my-mcp-server"],
+    "env_file": "/etc/operator/my-server.env"
+  }
+}
+```
+
+The `.env` file format:
+
+```bash
+# /etc/operator/my-server.env
+MY_API_KEY=sk-abc123
+DATABASE_URL=postgresql://user:pass@localhost/db
+```
+
+Variables defined in both `env` and `env_file` are merged, with `env` taking precedence.
+
+---
+
+## How tools become available
+
+When Operator OS starts with MCP enabled:
+
+1. Each enabled server is launched (stdio) or connected to (SSE/HTTP).
+2. The MCP client performs the protocol handshake and fetches the server's tool list.
+3. Each tool is wrapped in an `MCPTool` adapter and registered in the global `ToolRegistry`.
+4. The LLM's system prompt is updated with the new tool definitions.
+
+If a server fails to connect, its tools are not registered and a warning is logged. The agent continues operating with the remaining tools.

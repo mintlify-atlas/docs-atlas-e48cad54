@@ -1,0 +1,225 @@
+---
+title: "Agent configuration"
+description: "The agents.defaults section controls the workspace directory, model selection, token budgets, and tool iteration limits applied to every agent."
+---
+
+## `agents.defaults`
+
+All fields under `agents.defaults` apply to every agent unless overridden by a
+specific agent definition in `agents.list`. Edit `~/.operator/config.json`:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "workspace": "~/.operator/workspace",
+      "restrict_to_workspace": true,
+      "model_name": "gpt4",
+      "max_tokens": 32768,
+      "max_tool_iterations": 50
+    }
+  }
+}
+```
+
+## Field reference
+
+<ParamField path="workspace" type="string" default="~/.operator/workspace">
+  Absolute or `~`-prefixed path to the directory the agent treats as its home.
+  All file read/write operations and shell commands are rooted here when
+  `restrict_to_workspace` is `true`.
+
+  The tilde (`~`) is expanded to the current user's home directory at startup.
+  You can also set this via the environment variable
+  `OPERATOR_AGENTS_DEFAULTS_WORKSPACE`.
+
+  ```json
+  "workspace": "/home/alice/projects/mybot"
+  ```
+</ParamField>
+
+<ParamField path="restrict_to_workspace" type="boolean" default="true">
+  When `true`, the agent cannot read files, write files, or run shell commands
+  that reference paths outside the `workspace` directory. Path traversal
+  attempts (for example `../../etc/passwd`) are blocked at the tool layer before
+  any command reaches the OS.
+
+  Set to `false` only if the agent legitimately needs access to the full
+  filesystem. See [Security & sandboxing](/configuration/security) for details.
+
+  Environment variable: `OPERATOR_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE`
+</ParamField>
+
+<ParamField path="allow_read_outside_workspace" type="boolean" default="false">
+  When `restrict_to_workspace` is `true`, this flag allows the agent to **read**
+  files anywhere on the filesystem while still blocking writes and shell
+  commands to paths outside the workspace. Useful when the agent needs to
+  reference read-only data or config files in system directories.
+
+  Environment variable: `OPERATOR_AGENTS_DEFAULTS_ALLOW_READ_OUTSIDE_WORKSPACE`
+</ParamField>
+
+<ParamField path="model_name" type="string">
+  The `model_name` alias from `model_list` that the agent uses by default.
+  This must match exactly one (or more, for load balancing) entries in the
+  `model_list` array.
+
+  ```json
+  "model_name": "claude-sonnet-4.6"
+  ```
+
+  Environment variable: `OPERATOR_AGENTS_DEFAULTS_MODEL_NAME`
+
+  See [AI model configuration](/configuration/models) for how to define models.
+</ParamField>
+
+<ParamField path="model_fallbacks" type="string[]">
+  Ordered list of `model_name` aliases to try if the primary model returns an
+  error or is unavailable. Operator attempts each fallback in sequence before
+  surfacing a failure to the user.
+
+  ```json
+  "model_fallbacks": ["gpt4", "gemini-flash"]
+  ```
+</ParamField>
+
+<ParamField path="max_tokens" type="number" default="32768">
+  Maximum number of tokens the model may generate in a single response. This
+  maps to the `max_tokens` parameter in the API request.
+
+  Higher values allow longer responses but consume more quota. Set this to a
+  lower value to keep costs predictable or to avoid hitting model output limits.
+
+  Environment variable: `OPERATOR_AGENTS_DEFAULTS_MAX_TOKENS`
+</ParamField>
+
+<ParamField path="temperature" type="number">
+  Sampling temperature passed to the model, typically between `0.0` and `1.0`.
+  Lower values produce more deterministic output; higher values produce more
+  varied output.
+
+  When omitted (`null`), Operator does not include a `temperature` parameter
+  in the API request, which causes the model to use its own default.
+
+  ```json
+  "temperature": 0.5
+  ```
+
+  Environment variable: `OPERATOR_AGENTS_DEFAULTS_TEMPERATURE`
+</ParamField>
+
+<ParamField path="max_tool_iterations" type="number" default="50">
+  Maximum number of tool calls (read file, exec, web search, etc.) the agent
+  may perform before the current conversation turn is forcibly terminated.
+  This is a safety valve that prevents runaway agents from looping indefinitely.
+
+  When the limit is reached, Operator stops the agent's tool-use loop and
+  returns whatever output was accumulated up to that point, with a notice that
+  the iteration limit was reached.
+
+  The `config.example.json` ships with `20`; the built-in default is `50`.
+
+  Environment variable: `OPERATOR_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS`
+</ParamField>
+
+<ParamField path="max_media_size" type="number" default="20971520">
+  Maximum size in bytes of a single media file (image, audio, etc.) that the
+  agent may read or include in a message. The default is 20 MB
+  (`20 * 1024 * 1024`).
+
+  Environment variable: `OPERATOR_AGENTS_DEFAULTS_MAX_MEDIA_SIZE`
+</ParamField>
+
+## Workspace directory behavior
+
+The workspace directory is the agent's working root. When the agent runs shell
+commands, it starts in this directory. When file paths are relative, they
+resolve relative to the workspace.
+
+<Steps>
+  <Step title="Set a workspace path">
+    Choose a directory you want the agent to operate in. It will be created if
+    it does not exist.
+
+    ```json
+    {
+      "agents": {
+        "defaults": {
+          "workspace": "~/projects/agent-sandbox"
+        }
+      }
+    }
+    ```
+  </Step>
+  <Step title="Enable workspace restriction">
+    Leave `restrict_to_workspace` at its default of `true`. The agent cannot
+    escape this directory through relative path traversal or absolute paths.
+  </Step>
+  <Step title="Grant selective read access">
+    If the agent needs to read files outside the workspace (for example, a
+    shared config directory), enable `allow_read_outside_workspace` without
+    disabling the full restriction.
+
+    ```json
+    {
+      "agents": {
+        "defaults": {
+          "restrict_to_workspace": true,
+          "allow_read_outside_workspace": true
+        }
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Tool iteration limits
+
+`max_tool_iterations` bounds how many tool invocations one conversational turn
+may make. A typical code-editing task might use 5–15 iterations (read file,
+edit, run tests, read output). The default of `50` is generous for complex
+tasks; lower it if you want tighter cost or time control.
+
+When the limit is exceeded, the agent stops its loop and responds with:
+
+```
+Maximum tool iterations (50) reached. Stopping agent loop.
+```
+
+The partial output from completed tool calls is included in the response.
+
+## Named agent list
+
+In addition to `agents.defaults`, you can define named agents in `agents.list`.
+Each named agent inherits all defaults and can override individual fields:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model_name": "gpt4",
+      "max_tokens": 32768
+    },
+    "list": [
+      {
+        "id": "code-agent",
+        "name": "Code Agent",
+        "workspace": "~/code-workspace",
+        "model": {
+          "primary": "claude-sonnet-4.6",
+          "fallbacks": ["gpt4"]
+        }
+      },
+      {
+        "id": "research-agent",
+        "name": "Research Agent",
+        "workspace": "~/research-workspace",
+        "model": "gemini-flash"
+      }
+    ]
+  }
+}
+```
+
+Named agents can be bound to specific channels or users using the `bindings`
+top-level key.

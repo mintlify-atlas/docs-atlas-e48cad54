@@ -1,80 +1,187 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Quick Start"
+description: "Get a running Operator OS agent in 5 minutes. Download the binary, initialize your workspace, add an API key, and send your first message."
 ---
 
-## Get started in three steps
+This guide takes you from zero to a live agent as fast as possible. By the end you'll have the gateway running and an agent responding to messages.
 
-Get your documentation site running locally and make your first customization.
+<Steps>
 
-### Step 1: Set up your local environment
+<Step title="Download the binary">
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+Download the precompiled binary for your platform from the [Releases page](https://github.com/avrilonline/Operator-OS/releases). Place it somewhere on your `PATH` — `~/.local/bin` is a good choice on Linux and macOS.
 
-### Step 2: Deploy your changes
+<Tabs>
+  <Tab title="Linux (x86_64)">
+    ```bash
+    curl -L https://github.com/avrilonline/Operator-OS/releases/latest/download/operator_Linux_x86_64.tar.gz \
+      | tar -xz operator
+    mv operator ~/.local/bin/operator
+    chmod +x ~/.local/bin/operator
+    ```
+  </Tab>
+  <Tab title="Linux (ARM64)">
+    ```bash
+    curl -L https://github.com/avrilonline/Operator-OS/releases/latest/download/operator_Linux_arm64.tar.gz \
+      | tar -xz operator
+    mv operator ~/.local/bin/operator
+    chmod +x ~/.local/bin/operator
+    ```
+  </Tab>
+  <Tab title="Linux (RISC-V)">
+    ```bash
+    curl -L https://github.com/avrilonline/Operator-OS/releases/latest/download/operator_Linux_riscv64.tar.gz \
+      | tar -xz operator
+    mv operator ~/.local/bin/operator
+    chmod +x ~/.local/bin/operator
+    ```
+  </Tab>
+  <Tab title="macOS (Apple Silicon)">
+    ```bash
+    curl -L https://github.com/avrilonline/Operator-OS/releases/latest/download/operator_Darwin_arm64.tar.gz \
+      | tar -xz operator
+    mv operator ~/.local/bin/operator
+    chmod +x ~/.local/bin/operator
+    ```
+  </Tab>
+  <Tab title="Windows (x86_64)">
+    Download `operator_Windows_x86_64.zip` from the [Releases page](https://github.com/avrilonline/Operator-OS/releases), extract it, and add the directory to your `PATH`.
+  </Tab>
+</Tabs>
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+Verify the installation:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+```bash
+operator version
+```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+</Step>
 
-### Step 3: Go live
+<Step title="Initialize your workspace">
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+Run `operator onboard` to create your configuration file and workspace directory at `~/.operator/`:
 
-## Next steps
+```bash
+operator onboard
+```
 
-Now that you have your docs running, explore these key features:
+This creates:
+- `~/.operator/config.json` — your agent configuration
+- `~/.operator/workspace/` — the agent's sandboxed working directory
 
-<CardGroup cols={2}>
+You'll see output like:
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+```
+operator is ready!
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+Next steps:
+  1. Add your API key to ~/.operator/config.json
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+     Recommended:
+     - OpenRouter: https://openrouter.ai/keys (access 100+ models)
+     - Ollama:     https://ollama.com (local, free)
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+  2. Chat: operator agent -m "Hello!"
+```
 
-</CardGroup>
+<Tip>
+  If you already have a `config.json` and want to reset to defaults, `operator onboard` will ask before overwriting.
+</Tip>
+
+</Step>
+
+<Step title="Add your API key">
+
+Open `~/.operator/config.json` and add your LLM provider credentials to the `model_list` array. The `agents.defaults.model_name` field controls which model the agent uses by default.
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "workspace": "~/.operator/workspace",
+      "restrict_to_workspace": true,
+      "model_name": "claude-sonnet-4.6",
+      "max_tokens": 8192,
+      "temperature": 0.7,
+      "max_tool_iterations": 20
+    }
+  },
+  "model_list": [
+    {
+      "model_name": "claude-sonnet-4.6",
+      "model": "anthropic/claude-sonnet-4.6",
+      "api_key": "sk-ant-your-key",
+      "api_base": "https://api.anthropic.com/v1"
+    },
+    {
+      "model_name": "gpt4",
+      "model": "openai/gpt-5.2",
+      "api_key": "sk-your-openai-key",
+      "api_base": "https://api.openai.com/v1"
+    }
+  ]
+}
+```
+
+Operator identifies providers by the prefix in the `model` field — `anthropic/`, `openai/`, `gemini/`, `ollama/`, etc. No code changes are needed to switch models; just update `model_name` in `agents.defaults`.
+
+<Info>
+  To use a local Ollama model with no API key, set `"model": "ollama/llama3"` and `"api_base": "http://localhost:11434/v1"`, then omit the `api_key` field.
+</Info>
+
+</Step>
+
+<Step title="Start the gateway">
+
+The gateway daemon connects your agent to configured channels (Slack, Telegram, Discord, etc.) and keeps it available continuously:
+
+```bash
+operator gateway
+```
+
+You'll see the gateway start and connect to any channels you've enabled in `config.json`. Leave this running in a terminal, a `tmux` session, or a systemd service.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  If you haven't configured any channels yet, the gateway still starts successfully — it just won't accept inbound messages from external platforms until you configure one. You can always interact via the CLI.
 </Note>
+
+</Step>
+
+<Step title="Send your first message">
+
+With the gateway running (or without it, for a direct CLI invocation), use `operator agent` to send a message:
+
+```bash
+operator agent -m "Hello! What can you do?"
+```
+
+The agent will respond in your terminal. Try a more practical prompt:
+
+```bash
+operator agent -m "What is the current date and time, and list the files in my workspace?"
+```
+
+The agent will invoke its built-in tools and return a structured response.
+
+</Step>
+
+</Steps>
+
+## What's next
+
+Now that you have a running agent, explore what Operator OS can do:
+
+<CardGroup cols={2}>
+  <Card title="Connect a channel" icon="plug" href="/channels/overview">
+    Add Slack, Telegram, Discord, or WhatsApp so you can message your agent from anywhere.
+  </Card>
+  <Card title="Configure models" icon="brain" href="/configuration/models">
+    Switch providers, configure load balancing, or point to a local Ollama instance.
+  </Card>
+  <Card title="Built-in tools" icon="wrench" href="/tools/overview">
+    Give your agent access to DuckDuckGo, Brave Search, web fetch, and more.
+  </Card>
+  <Card title="Deploy with Docker" icon="docker" href="/deployment/docker">
+    Run the gateway as a fully containerized service with Docker Compose.
+  </Card>
+</CardGroup>

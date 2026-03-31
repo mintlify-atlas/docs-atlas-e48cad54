@@ -1,0 +1,152 @@
+---
+title: "WhatsApp"
+description: "Connect your Operator OS agent to WhatsApp via a WebSocket bridge or natively using whatsmeow."
+---
+
+Operator supports two distinct WhatsApp connection modes. Choose based on your infrastructure and requirements:
+
+| Mode | How it works | When to use |
+|---|---|---|
+| **Bridge** | Connects to an external WhatsApp bridge over WebSocket | You already run a bridge (e.g., whatsapp-web.js, mautrix-whatsapp) or want a language-agnostic adapter |
+| **Native** | Uses [whatsmeow](https://github.com/tulir/whatsmeow) in-process | You want a self-contained setup with no external bridge dependency |
+
+<Warning>
+  Always configure `allow_from` for WhatsApp. WhatsApp phone numbers are often guessable or discoverable via group chats. Without an allow list, any WhatsApp user who finds your number can interact with your agent.
+</Warning>
+
+<Tabs>
+  <Tab title="Bridge mode">
+    In bridge mode, Operator connects to an external process that manages the WhatsApp Web protocol. The bridge and Operator communicate over a WebSocket connection using a simple JSON message protocol.
+
+    The bridge sends messages to Operator with this structure:
+    ```json
+    {
+      "type": "message",
+      "from": "+15551234567",
+      "chat": "+15551234567",
+      "content": "Hello",
+      "id": "msg_abc123",
+      "from_name": "Alice"
+    }
+    ```
+
+    Operator sends replies with:
+    ```json
+    {
+      "type": "message",
+      "to": "+15551234567",
+      "content": "Hi Alice!"
+    }
+    ```
+
+    ### Setup
+
+    <Steps>
+      <Step title="Deploy a WhatsApp bridge">
+        Set up a WebSocket-capable WhatsApp bridge that implements the protocol above. The bridge should expose a WebSocket server at a URL like `ws://localhost:3001`.
+      </Step>
+      <Step title="Configure Operator">
+        ```json
+        {
+          "channels": {
+            "whatsapp": {
+              "enabled": true,
+              "bridge_url": "ws://localhost:3001",
+              "use_native": false,
+              "session_store_path": "",
+              "allow_from": ["+15551234567"],
+              "reasoning_channel_id": ""
+            }
+          }
+        }
+        ```
+      </Step>
+      <Step title="Start the gateway">
+        Start Operator. It will connect to the bridge WebSocket on startup and begin routing messages.
+      </Step>
+    </Steps>
+  </Tab>
+  <Tab title="Native mode">
+    In native mode, Operator uses the `whatsmeow` library to connect directly to WhatsApp Web servers. The session is stored in a local SQLite database. On first run, a QR code is printed to the terminal — scan it with WhatsApp on your phone under **Linked Devices**.
+
+    <Note>
+      Native mode requires Operator to be built with the `whatsapp_native` build tag: `go build -tags whatsapp_native ./...`
+    </Note>
+
+    ### Setup
+
+    <Steps>
+      <Step title="Prepare a session directory">
+        Choose or create a directory to store the WhatsApp session database. Example: `/var/lib/operator/whatsapp`. This directory must be writable by the Operator process and should be persisted across restarts.
+      </Step>
+      <Step title="Configure Operator">
+        ```json
+        {
+          "channels": {
+            "whatsapp": {
+              "enabled": true,
+              "bridge_url": "",
+              "use_native": true,
+              "session_store_path": "/var/lib/operator/whatsapp",
+              "allow_from": ["+15551234567@s.whatsapp.net"],
+              "reasoning_channel_id": ""
+            }
+          }
+        }
+        ```
+
+        The `allow_from` values in native mode should use the WhatsApp JID format: `{phone_number}@s.whatsapp.net`.
+      </Step>
+      <Step title="Scan the QR code">
+        Start the gateway. On first run, a QR code is printed to stdout:
+
+        ```
+        [whatsapp] Scan this QR code with WhatsApp (Linked Devices):
+        ▄▄▄▄▄▄▄ ▄ ▄▄▄▄▄▄▄
+        ...
+        ```
+
+        Open WhatsApp on your phone → **Settings → Linked Devices → Link a Device** and scan the code.
+      </Step>
+      <Step title="Reconnection">
+        After the first scan, the session is stored in `session_store_path/store.db`. Subsequent restarts reconnect automatically without a new QR code. If the session is invalidated (e.g., you unlink the device in WhatsApp), delete `store.db` and scan again.
+      </Step>
+    </Steps>
+
+    Native mode includes automatic reconnection with exponential backoff (5s initial, up to 5 minutes) when the WhatsApp connection drops.
+  </Tab>
+</Tabs>
+
+## Configuration reference
+
+<ParamField body="enabled" type="boolean" required>
+  Set to `true` to activate the WhatsApp channel.
+</ParamField>
+
+<ParamField body="bridge_url" type="string">
+  WebSocket URL of the external bridge. Required when `use_native` is `false`. Example: `ws://localhost:3001`.
+</ParamField>
+
+<ParamField body="use_native" type="boolean">
+  When `true`, use the built-in whatsmeow connection instead of an external bridge. Requires the `whatsapp_native` build tag. Default: `false`.
+</ParamField>
+
+<ParamField body="session_store_path" type="string">
+  Directory path where the SQLite session database is stored in native mode. Example: `/var/lib/operator/whatsapp`. If empty, defaults to `"whatsapp"` relative to the working directory.
+</ParamField>
+
+<ParamField body="allow_from" type="array of strings">
+  Sender identifiers permitted to message the agent. In bridge mode, this is typically the phone number as the bridge sends it (e.g. `"+15551234567"`). In native mode, use WhatsApp JIDs (e.g. `"15551234567@s.whatsapp.net"`).
+
+  **Strongly recommended** — leave empty only if you fully control who can reach the WhatsApp number. See [Common configuration fields](/channels/overview#common-configuration-fields) for details.
+</ParamField>
+
+<ParamField body="reasoning_channel_id" type="string">
+  A chat ID where agent reasoning traces are sent. Leave empty to disable. See [Messaging channels](/channels/overview#common-configuration-fields) for details.
+</ParamField>
+
+## Security considerations
+
+WhatsApp numbers are often shared in groups and can be forwarded. Unlike Slack or Discord where you control server membership, a WhatsApp number can receive messages from anyone with it. Always set `allow_from` to a specific list of phone numbers or JIDs.
+
+Messages from senders not in `allow_from` are dropped immediately, before any media is downloaded or the agent is invoked.

@@ -1,0 +1,297 @@
+---
+title: "AI model configuration"
+description: "The model_list array is the single place to define every AI provider Operator can use. Each entry maps a short alias to a provider, model ID, and credentials."
+---
+
+## The `model_list` array
+
+`model_list` is an array of model entries in `~/.operator/config.json`. The agent references entries by their `model_name` alias, not by the raw API model identifier.
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "gpt4",
+      "model": "openai/gpt-5.2",
+      "api_key": "sk-your-openai-key",
+      "api_base": "https://api.openai.com/v1"
+    }
+  ],
+  "agents": {
+    "defaults": {
+      "model_name": "gpt4"
+    }
+  }
+}
+```
+
+### Entry fields
+
+<ParamField path="model_name" type="string" required>
+  The alias used throughout the rest of the config to refer to this model.
+  Set `agents.defaults.model_name` to this value to make the model the default.
+  Multiple entries with the same `model_name` enable load balancing — Operator
+  selects between them in round-robin order.
+</ParamField>
+
+<ParamField path="model" type="string" required>
+  The fully qualified model identifier including its protocol prefix, for example
+  `openai/gpt-5.2` or `anthropic/claude-sonnet-4.6`. The protocol prefix
+  determines which provider implementation handles the request. If no prefix
+  is present, `openai` is assumed.
+</ParamField>
+
+<ParamField path="api_key" type="string">
+  The API key sent as a `Bearer` token to the provider. Required for all
+  HTTP-based providers. Not used for OAuth providers such as `antigravity`
+  and `github-copilot`.
+</ParamField>
+
+<ParamField path="api_base" type="string">
+  The base URL for the provider's API. Each protocol has a built-in default
+  (see the provider table below), so this field is optional when using the
+  official endpoint. Set it to route traffic through a proxy, a self-hosted
+  deployment, or an OpenAI-compatible endpoint.
+</ParamField>
+
+<ParamField path="auth_method" type="string">
+  Authentication mechanism. Use `"oauth"` for providers that require OAuth
+  2.0 login (Antigravity / GitHub Copilot). For Anthropic and OpenAI you can
+  also specify `"token"` to load credentials from the local auth store
+  (`~/.operator/auth.json`) instead of an `api_key`.
+</ParamField>
+
+<ParamField path="proxy" type="string">
+  Optional HTTP/HTTPS/SOCKS5 proxy URL applied to all requests for this entry.
+  Example: `"http://proxy.example.com:3128"`.
+</ParamField>
+
+<ParamField path="rpm" type="number">
+  Optional requests-per-minute cap. Operator respects this limit when selecting
+  entries during load balancing.
+</ParamField>
+
+<ParamField path="request_timeout" type="number">
+  Per-request timeout in seconds. Overrides the global default when set.
+</ParamField>
+
+## Protocol prefix system
+
+The `model` field uses a `protocol/model-identifier` format. The protocol prefix routes the request to the correct provider implementation.
+
+| Protocol | Provider | Default `api_base` |
+| --- | --- | --- |
+| `openai` | OpenAI | `https://api.openai.com/v1` |
+| `anthropic` | Anthropic | `https://api.anthropic.com/v1` |
+| `gemini` | Google Gemini (API key) | `https://generativelanguage.googleapis.com/v1beta` |
+| `antigravity` | Google Cloud Code Assist (OAuth) | — (OAuth, no base URL) |
+| `groq` | Groq | `https://api.groq.com/openai/v1` |
+| `deepseek` | DeepSeek | `https://api.deepseek.com/v1` |
+| `ollama` | Ollama (local) | `http://localhost:11434/v1` |
+| `openrouter` | OpenRouter | `https://openrouter.ai/api/v1` |
+| `mistral` | Mistral AI | `https://api.mistral.ai/v1` |
+| `qwen` | Qwen / Alibaba DashScope | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| `zhipu` | Zhipu AI (GLM) | `https://open.bigmodel.cn/api/paas/v4` |
+| `moonshot` | Moonshot (Kimi) | `https://api.moonshot.cn/v1` |
+| `nvidia` | NVIDIA | `https://integrate.api.nvidia.com/v1` |
+| `cerebras` | Cerebras | `https://api.cerebras.ai/v1` |
+| `volcengine` | Volcengine (Doubao) | `https://ark.cn-beijing.volces.com/api/v3` |
+| `shengsuanyun` | ShengsuanYun | `https://router.shengsuanyun.com/api/v1` |
+| `vllm` | vLLM (local) | `http://localhost:8000/v1` |
+| `litellm` | LiteLLM proxy | `http://localhost:4000/v1` |
+| `github-copilot` | GitHub Copilot | `localhost:4321` (gRPC) |
+| `claude-cli` | Claude CLI (subprocess) | — (local process) |
+| `codex-cli` | Codex CLI (subprocess) | — (local process) |
+
+<Note>
+  All protocols except `anthropic`, `antigravity`, `github-copilot`,
+  `claude-cli`, and `codex-cli` use an OpenAI-compatible HTTP API.
+  Any service that exposes an OpenAI-compatible endpoint works with the
+  `openai` protocol prefix and a custom `api_base`.
+</Note>
+
+## Provider configuration examples
+
+<Tabs>
+  <Tab title="OpenAI">
+    ```json
+    {
+      "model_name": "gpt4",
+      "model": "openai/gpt-5.2",
+      "api_key": "sk-your-openai-key",
+      "api_base": "https://api.openai.com/v1"
+    }
+    ```
+    Get your key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+  </Tab>
+
+  <Tab title="Anthropic">
+    ```json
+    {
+      "model_name": "claude-sonnet-4.6",
+      "model": "anthropic/claude-sonnet-4.6",
+      "api_key": "sk-ant-your-key",
+      "api_base": "https://api.anthropic.com/v1"
+    }
+    ```
+    Get your key at [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys).
+  </Tab>
+
+  <Tab title="Gemini">
+    ```json
+    {
+      "model_name": "gemini-flash",
+      "model": "gemini/gemini-2.0-flash-exp",
+      "api_key": "YOUR_GOOGLE_AI_KEY",
+      "api_base": "https://generativelanguage.googleapis.com/v1beta"
+    }
+    ```
+    Get your key at [ai.google.dev](https://ai.google.dev/).
+  </Tab>
+
+  <Tab title="Groq">
+    ```json
+    {
+      "model_name": "llama-fast",
+      "model": "groq/llama-3.3-70b-versatile",
+      "api_key": "gsk_your-groq-key",
+      "api_base": "https://api.groq.com/openai/v1"
+    }
+    ```
+    Get your key at [console.groq.com/keys](https://console.groq.com/keys).
+  </Tab>
+
+  <Tab title="DeepSeek">
+    ```json
+    {
+      "model_name": "deepseek",
+      "model": "deepseek/deepseek-chat",
+      "api_key": "sk-your-deepseek-key"
+    }
+    ```
+    Get your key at [platform.deepseek.com](https://platform.deepseek.com/).
+  </Tab>
+
+  <Tab title="Ollama (local)">
+    ```json
+    {
+      "model_name": "llama3",
+      "model": "ollama/llama3",
+      "api_base": "http://localhost:11434/v1",
+      "api_key": "ollama"
+    }
+    ```
+    Ollama does not require a real API key. Use any non-empty string.
+    Install Ollama from [ollama.com](https://ollama.com) and run
+    `ollama pull llama3` before starting Operator.
+  </Tab>
+
+  <Tab title="OpenRouter">
+    ```json
+    {
+      "model_name": "openrouter-auto",
+      "model": "openrouter/auto",
+      "api_key": "sk-or-v1-your-key",
+      "api_base": "https://openrouter.ai/api/v1"
+    }
+    ```
+    OpenRouter gives access to 100+ models with a single key. Use the full
+    model path when specifying a particular model, for example
+    `"openrouter/openai/gpt-5.2"` or `"openrouter/google/gemini-2.0-flash-exp:free"`.
+  </Tab>
+
+  <Tab title="Antigravity (OAuth)">
+    Antigravity (Google Cloud Code Assist) uses OAuth 2.0 rather than an API key.
+    Set `auth_method` to `"oauth"` and omit `api_key`:
+
+    ```json
+    {
+      "model_name": "gemini-flash",
+      "model": "antigravity/gemini-3-flash",
+      "auth_method": "oauth"
+    }
+    ```
+
+    Before the agent can use this model, authenticate once with the CLI:
+
+    ```bash
+    operator auth login --provider antigravity
+    ```
+
+    Credentials are cached in `~/.operator/auth.json` and refreshed automatically.
+    See [CLI auth reference](/reference/cli/auth) for the full login flow.
+  </Tab>
+</Tabs>
+
+## Setting the default model
+
+`agents.defaults.model_name` names the model entry the agent uses by default
+when no model is specified for a task. It must match a `model_name` value in
+`model_list`.
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model_name": "claude-sonnet-4.6"
+    }
+  }
+}
+```
+
+You can also override this at runtime with the environment variable:
+
+```bash
+OPERATOR_AGENTS_DEFAULTS_MODEL_NAME=gpt4
+```
+
+## Multi-model load balancing
+
+Adding multiple entries that share the same `model_name` enables automatic
+load balancing. Operator selects between them using round-robin so that
+requests are spread across different API keys or endpoints.
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "gpt4-lb",
+      "model": "openai/gpt-5.2",
+      "api_key": "sk-key1",
+      "api_base": "https://api1.example.com/v1"
+    },
+    {
+      "model_name": "gpt4-lb",
+      "model": "openai/gpt-5.2",
+      "api_key": "sk-key2",
+      "api_base": "https://api2.example.com/v1"
+    }
+  ],
+  "agents": {
+    "defaults": {
+      "model_name": "gpt4-lb"
+    }
+  }
+}
+```
+
+<Tip>
+  Use load balancing to stay within per-key rate limits or to route traffic
+  across multiple self-hosted inference nodes.
+</Tip>
+
+## Model fallbacks
+
+You can configure ordered fallback models on `agents.defaults` for resilience.
+If the primary model fails, Operator retries with each fallback in sequence:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model_name": "claude-sonnet-4.6",
+      "model_fallbacks": ["gpt4", "gemini-flash"]
+    }
+  }
+}
+```

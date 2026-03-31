@@ -1,0 +1,225 @@
+---
+title: "operator auth"
+description: "Manage authentication credentials for LLM providers — login, logout, status, and available models."
+---
+
+## Synopsis
+
+```bash
+operator auth <subcommand> [flags]
+```
+
+## Description
+
+`operator auth` manages OAuth tokens and API key credentials for LLM providers. Credentials are stored in `~/.operator/auth.json`. When you log in, the config file (`~/.operator/config.json`) is also updated to reflect the new auth method and default model for that provider.
+
+### Supported providers
+
+| Provider | Identifier | Auth method |
+|---|---|---|
+| OpenAI | `openai` | OAuth (browser or device code) |
+| Anthropic | `anthropic` | API key (paste token) |
+| Google Antigravity | `google-antigravity` or `antigravity` | Google OAuth (browser) |
+
+## Subcommands
+
+### operator auth login
+
+Authenticate with a provider and store credentials locally.
+
+```bash
+operator auth login --provider <provider> [--device-code]
+```
+
+<ParamField query="--provider" type="string" required>
+  The provider to authenticate with. Required. Shorthand: `-p`.
+  Accepted values: `openai`, `anthropic`, `google-antigravity` (alias: `antigravity`).
+</ParamField>
+
+<ParamField query="--device-code" type="boolean" default="false">
+  Use the OAuth device code flow instead of opening a browser. Use this when running Operator in a headless or SSH environment where a browser cannot be launched.
+</ParamField>
+
+After a successful login:
+
+- Credentials are written to `~/.operator/auth.json`.
+- The matching model entry in `model_list` has its `auth_method` updated.
+- `agents.defaults.model_name` is updated to the provider's recommended default model.
+
+---
+
+### operator auth logout
+
+Remove stored credentials for a provider.
+
+```bash
+operator auth logout [--provider <provider>]
+```
+
+<ParamField query="--provider" type="string">
+  The provider to log out from. Shorthand: `-p`.
+  If omitted, credentials for **all** providers are removed.
+</ParamField>
+
+Logout clears the `auth_method` field in both `model_list` entries and the legacy `providers` block in `config.json`.
+
+---
+
+### operator auth status
+
+Display the current authentication state for all providers that have stored credentials.
+
+```bash
+operator auth status
+```
+
+For each authenticated provider, shows:
+
+- Auth method (`oauth` or `token`)
+- Credential status (`active`, `needs refresh`, or `expired`)
+- Account ID (if available)
+- Email address (Google Antigravity only)
+- Google Cloud project ID (Antigravity only)
+- Token expiry time (OAuth tokens only)
+
+---
+
+### operator auth models
+
+List available models for the authenticated `google-antigravity` provider.
+
+```bash
+operator auth models
+```
+
+Fetches the live model list from the Google Cloud Code Assist API using the stored access token. The token is refreshed automatically if it is close to expiry.
+
+<Note>
+  `operator auth models` only works for the `google-antigravity` provider. For other providers, refer to your provider's documentation or the `model_list` in `config.json`.
+</Note>
+
+## Examples
+
+**Log in with OpenAI (browser flow):**
+
+```bash
+operator auth login --provider openai
+```
+
+```
+Opening browser for authentication...
+Login successful!
+Account: user_abc123
+Default model set to: gpt-5.2
+```
+
+**Log in with OpenAI using device code (headless server):**
+
+```bash
+operator auth login --provider openai --device-code
+```
+
+```
+Go to https://auth.openai.com/device and enter code: ABCD-1234
+Waiting for authorisation...
+Login successful!
+Account: user_abc123
+Default model set to: gpt-5.2
+```
+
+**Log in with Anthropic (paste token):**
+
+```bash
+operator auth login --provider anthropic
+```
+
+```
+Paste your Anthropic API key: sk-ant-...
+Token saved for anthropic!
+Default model set to: claude-sonnet-4.6
+```
+
+**Log in with Google Antigravity (free tier via Google OAuth):**
+
+```bash
+operator auth login --provider google-antigravity
+```
+
+```
+Opening browser for Google OAuth...
+Email: alice@example.com
+Project: projects/123456789
+✓ Google Antigravity login successful!
+Default model set to: gemini-flash
+Try it: operator agent -m "Hello world"
+```
+
+**Check authentication status:**
+
+```bash
+operator auth status
+```
+
+```
+Authenticated Providers:
+------------------------
+  google-antigravity:
+    Method: oauth
+    Status: active
+    Email: alice@example.com
+    Project: projects/123456789
+    Expires: 2026-04-01 09:30
+  anthropic:
+    Method: token
+    Status: active
+```
+
+**List available Antigravity models:**
+
+```bash
+operator auth models
+```
+
+```
+Fetching models for project: projects/123456789
+
+Available Antigravity Models:
+-----------------------------
+  ✓ gemini-2.0-flash (Gemini 2.0 Flash)
+  ✓ gemini-2.5-pro (Gemini 2.5 Pro)
+  ✗ gemini-ultra (quota exhausted)
+```
+
+**Log out from a single provider:**
+
+```bash
+operator auth logout --provider anthropic
+```
+
+```
+Logged out from anthropic
+```
+
+**Log out from all providers:**
+
+```bash
+operator auth logout
+```
+
+```
+Logged out from all providers
+```
+
+## Credential storage
+
+Credentials are stored at `~/.operator/auth.json`. The file contains access tokens, refresh tokens, expiry timestamps, and provider-specific metadata (project IDs, email addresses, account IDs).
+
+<Warning>
+  `~/.operator/auth.json` contains sensitive credentials. Ensure the file permissions restrict access to your user only (`chmod 600 ~/.operator/auth.json`).
+</Warning>
+
+## Related commands
+
+- [`operator onboard`](/reference/cli/onboard) — create the initial config before authenticating
+- [`operator agent`](/reference/cli/agent) — start using the agent after logging in
+- [`operator status`](/reference/cli/status) — check which provider API keys and OAuth sessions are active

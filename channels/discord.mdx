@@ -1,0 +1,124 @@
+---
+title: "Discord"
+description: "Connect your Operator OS agent to Discord as a bot with support for typing indicators, file attachments, and mention-only mode."
+---
+
+Operator connects to Discord using the **Discord Gateway** (WebSocket) via the `discordgo` library. The bot receives messages from both direct messages and guild (server) channels in real time.
+
+The channel supports:
+- Direct messages (DMs)
+- Guild channel messages with optional `@mention`-only filtering
+- Audio file attachments (downloaded and forwarded to the agent)
+- Other attachment URLs forwarded as text references
+- Typing indicator (refreshed every 8 seconds while the agent is thinking)
+- Placeholder message ("Thinking... 💭") edited in-place with the final response when enabled
+- Media sending (images, files) via `SendMedia`
+- HTTP/HTTPS and SOCKS5 proxy support for the Discord WebSocket connection
+
+## Setup
+
+<Steps>
+  <Step title="Create a Discord application">
+    Go to the [Discord Developer Portal](https://discord.com/developers/applications) and click **New Application**. Give it a name and click **Create**.
+  </Step>
+  <Step title="Create a bot user">
+    In the left sidebar, select **Bot** and click **Add Bot** → **Yes, do it!**
+
+    Under **Privileged Gateway Intents**, enable:
+    - **Message Content Intent** — required to read message text
+    - **Server Members Intent** — required to resolve member display names
+
+    Click **Save Changes**.
+  </Step>
+  <Step title="Copy the bot token">
+    On the **Bot** page, click **Reset Token** and copy the token. Store it securely — this is your `token` config value. Do not share it.
+  </Step>
+  <Step title="Invite the bot to your server">
+    Go to **OAuth2 → URL Generator**. Under **Scopes**, select `bot`. Under **Bot Permissions**, select:
+    - Send Messages
+    - Read Message History
+    - Add Reactions
+    - Attach Files
+    - View Channels
+
+    Copy the generated URL, open it in a browser, and add the bot to your server.
+  </Step>
+  <Step title="Get your Discord user ID">
+    In Discord, go to **Settings → Advanced** and enable **Developer Mode**. Right-click your username anywhere and select **Copy User ID**. This is the value to put in `allow_from`.
+  </Step>
+  <Step title="Configure Operator">
+    Add the following to your `config.json`:
+
+    ```json
+    {
+      "channels": {
+        "discord": {
+          "enabled": true,
+          "token": "YOUR_BOT_TOKEN",
+          "proxy": "",
+          "allow_from": ["YOUR_USER_ID"],
+          "group_trigger": {
+            "mention_only": false
+          },
+          "reasoning_channel_id": ""
+        }
+      }
+    }
+    ```
+  </Step>
+  <Step title="Start the gateway">
+    Start Operator. The bot will connect and log its username and user ID. Message it in Discord.
+  </Step>
+</Steps>
+
+## Configuration reference
+
+<ParamField body="enabled" type="boolean" required>
+  Set to `true` to activate the Discord channel.
+</ParamField>
+
+<ParamField body="token" type="string" required>
+  The bot token from the Discord Developer Portal. Keep this secret — anyone with this token can control your bot.
+</ParamField>
+
+<ParamField body="proxy" type="string">
+  Proxy URL for both the HTTP API client and the WebSocket gateway connection. Supports `http://`, `https://`, and `socks5://` schemes. Example: `socks5://127.0.0.1:1080`. If empty, `HTTP_PROXY` / `HTTPS_PROXY` environment variables are used if set.
+</ParamField>
+
+<ParamField body="allow_from" type="array of strings">
+  Discord user IDs (snowflake strings) allowed to message the agent. Example: `["123456789012345678"]`. Enable Developer Mode in Discord settings to copy user IDs by right-clicking a username.
+
+  Leave empty to allow all users. See [Common configuration fields](/channels/overview#common-configuration-fields) for all supported formats.
+</ParamField>
+
+<ParamField body="group_trigger.mention_only" type="boolean">
+  When `true`, the bot only responds in guild (server) channels when `@mentioned` directly. Messages that do not contain a mention are silently ignored. DMs are always answered regardless of this setting.
+
+  Default: `false`.
+</ParamField>
+
+<ParamField body="reasoning_channel_id" type="string">
+  A Discord channel ID where agent reasoning traces are sent. Leave empty to disable. See [Messaging channels](/channels/overview#common-configuration-fields) for details.
+</ParamField>
+
+## The `mention_only` option
+
+In a large Discord server, you likely do not want the agent responding to every message in every channel. Set `mention_only` to `true`:
+
+```json
+"group_trigger": {
+  "mention_only": true
+}
+```
+
+With this enabled, only messages that `@mention` the bot in a guild channel trigger a response. The bot mention (`<@BOT_ID>`) is stripped from the content before it reaches the agent.
+
+DMs always get a response, regardless of `mention_only`.
+
+<Note>
+  Discord's message length limit is 2000 characters. Operator automatically splits longer responses into multiple sequential messages while preserving code block integrity.
+</Note>
+
+<Warning>
+  The **Message Content Intent** must be enabled in the Developer Portal, otherwise the bot will receive messages with empty content and cannot respond.
+</Warning>

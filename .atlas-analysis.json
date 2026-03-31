@@ -1,23 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "name": "Operator OS",
+  "projectType": "cli-tool",
+  "projectName": "Operator OS",
+  "projectDescription": "An ultra-lightweight AI agent operating system written in Go, designed to run on constrained hardware with <10MB RAM, supporting autonomous agents, persistent memory, multi-channel messaging, and multiple LLM providers.",
   "theme": "aspen",
-  "colors": {
-    "primary": "#94cb04",
-    "light": "#545454"
-  },
-  "favicon": "https://media.brand.dev/288cc7c4-5cef-4376-950b-bdf0083eedae.png",
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/operatoronline/standard-operator"
-    }
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/operatoronline/standard-operator"
-    }
-  },
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
   "navigation": {
     "tabs": [
       {
@@ -95,5 +83,38 @@
         ]
       }
     ]
-  }
+  },
+  "keyFeatures": [
+    "Ultra-lightweight: <10MB RAM, <1s cold start on single-core 0.6GHz processors",
+    "Single binary deployment across RISC-V, ARM64, and x86_64 architectures",
+    "Persistent long-term memory across sessions and reboots",
+    "Multi-channel messaging: Slack, Discord, Telegram, WhatsApp, DingTalk, Feishu, LINE, WeCom, QQ",
+    "Universal LLM support: OpenAI, Anthropic, Google Gemini, Groq, Ollama, DeepSeek, and more",
+    "Built-in tool system: shell execution, filesystem, web search, cron scheduling, I2C/SPI hardware",
+    "Model Context Protocol (MCP) integration for external tool servers",
+    "Skills marketplace via ClawHub registry",
+    "Sandbox security with workspace confinement and command filtering",
+    "Multi-agent spawning and sub-agent orchestration"
+  ],
+  "publicApiSurface": [
+    "operator onboard",
+    "operator gateway",
+    "operator agent -m <message>",
+    "operator auth login --provider <provider>",
+    "operator auth models",
+    "operator skills search <query>",
+    "operator skills install <skill>",
+    "operator cron list",
+    "operator status",
+    "operator migrate",
+    "operator version",
+    "config.json: agents.defaults",
+    "config.json: model_list[]",
+    "config.json: channels.<name>",
+    "config.json: tools.web",
+    "config.json: tools.mcp.servers",
+    "config.json: tools.exec",
+    "config.json: tools.skills.registries",
+    "config.json: gateway.host/port"
+  ]
 }

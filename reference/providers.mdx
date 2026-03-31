@@ -1,0 +1,465 @@
+---
+title: "AI provider reference"
+description: "All supported LLM providers, their protocol prefixes, default API endpoints, authentication methods, and example model IDs."
+---
+
+Operator connects to LLM providers through the `model_list` in `~/.operator/config.json`. Each entry specifies a `model` field using a `protocol/model-id` format. The protocol prefix determines which provider backend is used.
+
+<Tip>
+  Most providers use the OpenAI-compatible HTTP protocol, so adding a new provider requires only a config entry — no code changes needed.
+</Tip>
+
+## Provider table
+
+| Protocol prefix | Provider | Default `api_base` | Auth | Notes |
+|---|---|---|---|---|
+| `openai/` | OpenAI | `https://api.openai.com/v1` | API key | Default protocol when no prefix is given. |
+| `anthropic/` | Anthropic | `https://api.anthropic.com/v1` | API key or OAuth | Native Anthropic SDK. Supports `auth_method: "oauth"` via Claude Max. |
+| `gemini/` | Google Gemini | `https://generativelanguage.googleapis.com/v1beta` | API key | OpenAI-compatible Gemini endpoint. |
+| `antigravity/` | Google Cloud Code Assist | _(OAuth endpoint)_ | OAuth only | Access Gemini and Claude models via a free Google account. See [Antigravity](#antigravity-google-cloud-code-assist). |
+| `groq/` | Groq | `https://api.groq.com/openai/v1` | API key | OpenAI-compatible. Fast inference on Groq LPU hardware. |
+| `deepseek/` | DeepSeek | `https://api.deepseek.com/v1` | API key | OpenAI-compatible. Supports `deepseek-chat` and `deepseek-reasoner`. |
+| `openrouter/` | OpenRouter | `https://openrouter.ai/api/v1` | API key | Routes to 100+ models. Use `openrouter/provider/model-id` format. |
+| `zhipu/` | Zhipu AI (智谱) | `https://open.bigmodel.cn/api/paas/v4` | API key | GLM series models. Also accepts `glm/` alias. |
+| `qwen/` | Alibaba Qwen (通义千问) | `https://dashscope.aliyuncs.com/compatible-mode/v1` | API key | OpenAI-compatible DashScope endpoint. |
+| `moonshot/` | Moonshot AI (月之暗面) | `https://api.moonshot.cn/v1` | API key | Kimi models. Also matched by `kimi` in model name. |
+| `nvidia/` | NVIDIA NIM | `https://integrate.api.nvidia.com/v1` | API key | NVIDIA-hosted inference for Llama, Nemotron, and other models. |
+| `cerebras/` | Cerebras | `https://api.cerebras.ai/v1` | API key | OpenAI-compatible. Fast inference on Cerebras hardware. |
+| `volcengine/` | Volcengine (火山引擎) | `https://ark.cn-beijing.volces.com/api/v3` | API key | Doubao and other ByteDance models. |
+| `mistral/` | Mistral AI | `https://api.mistral.ai/v1` | API key | OpenAI-compatible Mistral endpoint. |
+| `ollama/` | Ollama | `http://localhost:11434/v1` | None (use `"ollama"`) | Local model serving. Set `api_key` to `"ollama"` as a placeholder. |
+| `vllm/` | vLLM | `http://localhost:8000/v1` | Optional | Self-hosted OpenAI-compatible inference. |
+| `shengsuanyun/` | ShengSuanYun (神算云) | `https://router.shengsuanyun.com/api/v1` | API key | OpenAI-compatible routing provider. |
+| `litellm/` | LiteLLM proxy | `http://localhost:4000/v1` | Optional | Self-hosted LiteLLM proxy server. |
+| `claude-cli/` | Claude CLI | _(local process)_ | Token/session | Delegates to local `claude` CLI binary. Requires Claude Max subscription. |
+| `codex-cli/` | Codex CLI | _(local process)_ | Token/session | Delegates to local `codex` CLI binary. |
+| `github-copilot/` | GitHub Copilot | `http://localhost:4321` | OAuth | Connects via gRPC or stdio to the Copilot extension. |
+
+---
+
+## Configuration snippets
+
+### OpenAI
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "gpt4",
+      "model": "openai/gpt-5.2",
+      "api_key": "sk-your-openai-key",
+      "api_base": "https://api.openai.com/v1"
+    }
+  ]
+}
+```
+
+Get your API key from [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+
+Common model IDs: `gpt-5.2`, `gpt-4o`, `gpt-4o-mini`, `o3`, `o3-mini`.
+
+### Anthropic
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "claude",
+      "model": "anthropic/claude-sonnet-4.6",
+      "api_key": "sk-ant-your-key"
+    }
+  ]
+}
+```
+
+Get your API key from [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys).
+
+Common model IDs: `claude-opus-4-6`, `claude-sonnet-4.6`, `claude-haiku-3-5`.
+
+### Gemini (Google AI Studio)
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "gemini",
+      "model": "gemini/gemini-2.0-flash-exp",
+      "api_key": "AIza-your-key",
+      "api_base": "https://generativelanguage.googleapis.com/v1beta"
+    }
+  ]
+}
+```
+
+Get your API key from [ai.google.dev](https://ai.google.dev/).
+
+Common model IDs: `gemini-2.5-pro`, `gemini-2.0-flash-exp`, `gemini-1.5-flash`.
+
+### Antigravity (Google Cloud Code Assist)
+
+Antigravity provides access to Gemini and Claude models through Google's Cloud Code Assist infrastructure. Authentication uses OAuth 2.0 with PKCE — **no API key is required**.
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "gemini-flash",
+      "model": "antigravity/gemini-3-flash",
+      "auth_method": "oauth"
+    }
+  ],
+  "agents": {
+    "defaults": {
+      "model_name": "gemini-flash"
+    }
+  }
+}
+```
+
+**Authentication:**
+
+```bash
+operator auth login --provider antigravity
+```
+
+On headless servers (Docker, VPS), the command prints an authorization URL. Open it in your local browser, complete the Google sign-in, then copy the final redirect URL (which starts with `http://localhost:51121/...`) and paste it back into the terminal.
+
+**Reliable model IDs** (from `operator auth models`):
+
+| Model ID | Description |
+|---|---|
+| `gemini-3-flash` | Fast, highly available |
+| `gemini-2.5-flash-lite` | Lightweight |
+| `claude-opus-4-6-thinking` | Powerful, includes reasoning |
+
+<Note>
+  Available models depend on your Google Cloud project. Run `operator auth models` to list what your project has access to. Credentials are stored in `~/.operator/auth.json`.
+</Note>
+
+<Warning>
+  Antigravity uses Google Cloud project quotas. When a quota is exhausted, Operator displays the reset time from the 429 error response. Switch to a different model or wait for the quota to reset.
+</Warning>
+
+### Groq
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "llama-70b",
+      "model": "groq/llama-3.3-70b-versatile",
+      "api_key": "gsk_your-key"
+    }
+  ]
+}
+```
+
+Get your API key from [console.groq.com/keys](https://console.groq.com/keys).
+
+Common model IDs: `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `mixtral-8x7b-32768`.
+
+### DeepSeek
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "deepseek",
+      "model": "deepseek/deepseek-chat",
+      "api_key": "sk-your-deepseek-key"
+    }
+  ]
+}
+```
+
+Get your API key from [platform.deepseek.com](https://platform.deepseek.com/).
+
+Model IDs: `deepseek-chat`, `deepseek-reasoner`.
+
+### OpenRouter
+
+OpenRouter provides a single endpoint for 100+ models. Use the format `openrouter/provider/model-id`:
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "auto",
+      "model": "openrouter/auto",
+      "api_key": "sk-or-v1-your-key"
+    },
+    {
+      "model_name": "or-claude",
+      "model": "openrouter/anthropic/claude-sonnet-4.6",
+      "api_key": "sk-or-v1-your-key"
+    }
+  ]
+}
+```
+
+Get your API key from [openrouter.ai/keys](https://openrouter.ai/keys).
+
+### Ollama (local)
+
+Ollama serves models locally with an OpenAI-compatible API. No real API key is needed; use the placeholder string `"ollama"`:
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "llama3",
+      "model": "ollama/llama3",
+      "api_key": "ollama",
+      "api_base": "http://localhost:11434/v1"
+    }
+  ]
+}
+```
+
+Pull models with `ollama pull llama3` before use.
+
+### vLLM (local/self-hosted)
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "local-model",
+      "model": "vllm/my-custom-model",
+      "api_key": "your-key-or-empty",
+      "api_base": "http://localhost:8000/v1"
+    }
+  ]
+}
+```
+
+### Qwen (Alibaba)
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "qwen-plus",
+      "model": "qwen/qwen-plus",
+      "api_key": "sk-your-dashscope-key",
+      "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    }
+  ]
+}
+```
+
+Get your API key from the [DashScope console](https://dashscope.console.aliyun.com/apiKey).
+
+Common model IDs: `qwen-plus`, `qwen-max`, `qwen-turbo`.
+
+### Zhipu AI (GLM)
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "glm-4",
+      "model": "zhipu/glm-4.7",
+      "api_key": "your-zhipu-key",
+      "api_base": "https://open.bigmodel.cn/api/paas/v4"
+    }
+  ]
+}
+```
+
+Get your API key from [open.bigmodel.cn](https://open.bigmodel.cn/usercenter/apikeys).
+
+### Moonshot AI (Kimi)
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "moonshot",
+      "model": "moonshot/moonshot-v1-8k",
+      "api_key": "sk-your-moonshot-key"
+    }
+  ]
+}
+```
+
+Get your API key from [platform.moonshot.cn](https://platform.moonshot.cn/console/api-keys).
+
+### NVIDIA NIM
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "nemotron",
+      "model": "nvidia/nemotron-4-340b-instruct",
+      "api_key": "nvapi-your-key"
+    }
+  ]
+}
+```
+
+Get your API key from [build.nvidia.com](https://build.nvidia.com/).
+
+### Cerebras
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "cerebras-llama",
+      "model": "cerebras/llama-3.3-70b",
+      "api_key": "your-cerebras-key"
+    }
+  ]
+}
+```
+
+Get your API key from [inference.cerebras.ai](https://inference.cerebras.ai/).
+
+### Volcengine (火山引擎 / Doubao)
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "doubao-pro",
+      "model": "volcengine/doubao-pro-32k",
+      "api_key": "your-volcengine-key",
+      "api_base": "https://ark.cn-beijing.volces.com/api/v3"
+    }
+  ]
+}
+```
+
+Get your API key from the [Volcengine console](https://console.volcengine.com/ark).
+
+### Mistral AI
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "mistral",
+      "model": "mistral/mistral-small-latest",
+      "api_key": "your-mistral-key"
+    }
+  ]
+}
+```
+
+Get your API key from [console.mistral.ai](https://console.mistral.ai/api-keys).
+
+Common model IDs: `mistral-large-latest`, `mistral-small-latest`, `codestral-latest`.
+
+### GitHub Copilot
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "copilot",
+      "model": "github-copilot/gpt-5.2",
+      "api_base": "http://localhost:4321",
+      "auth_method": "oauth"
+    }
+  ]
+}
+```
+
+Requires the GitHub Copilot extension to be running locally. Connect via `grpc` (default) or `stdio` using the `connect_mode` field.
+
+### Claude CLI
+
+Delegates requests to the local `claude` CLI binary. Requires a Claude Max subscription.
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "claude-local",
+      "model": "claude-cli/claude-sonnet-4.6",
+      "workspace": "~/.operator/workspace"
+    }
+  ]
+}
+```
+
+### Codex CLI
+
+Delegates requests to the local `codex` CLI binary.
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "codex-local",
+      "model": "codex-cli/codex-4",
+      "workspace": "~/.operator/workspace"
+    }
+  ]
+}
+```
+
+---
+
+## Load balancing
+
+Operator uses round-robin load balancing when multiple `model_list` entries share the same `model_name`. This lets you distribute load across multiple API keys, regions, or provider accounts:
+
+```json
+{
+  "model_list": [
+    { "model_name": "gpt4", "model": "openai/gpt-5.2", "api_key": "sk-key1", "api_base": "https://api1.example.com/v1" },
+    { "model_name": "gpt4", "model": "openai/gpt-5.2", "api_key": "sk-key2", "api_base": "https://api2.example.com/v1" },
+    { "model_name": "gpt4", "model": "openai/gpt-5.2", "api_key": "sk-key3", "api_base": "https://api3.example.com/v1" }
+  ]
+}
+```
+
+Each request to `gpt4` cycles to the next endpoint in sequence.
+
+---
+
+## Adding a custom OpenAI-compatible provider
+
+Any provider that implements the OpenAI Chat Completions API can be added with no code changes:
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "my-llm",
+      "model": "openai/my-model-v1",
+      "api_key": "your-api-key",
+      "api_base": "https://api.your-provider.com/v1"
+    }
+  ]
+}
+```
+
+Use `openai/` as the protocol prefix (or omit it) and point `api_base` at your provider's endpoint.
+
+---
+
+## `api_base` override
+
+Every provider's default `api_base` can be overridden in the `model_list` entry. This is useful for:
+
+- **Self-hosted deployments** — point at your own inference server.
+- **Regional endpoints** — use a geographically closer API endpoint.
+- **LiteLLM proxy** — route through a local proxy that handles multiple backends.
+- **Vendor proxy services** — corporate proxy gateways.
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "claude-proxied",
+      "model": "anthropic/claude-sonnet-4.6",
+      "api_key": "sk-ant-your-key",
+      "api_base": "https://your-proxy.corp.example.com/anthropic/v1"
+    }
+  ]
+}
+```

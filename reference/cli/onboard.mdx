@@ -1,0 +1,97 @@
+---
+title: "operator onboard"
+description: "Initialize the operator configuration file and workspace directory structure."
+---
+
+## Synopsis
+
+```bash
+operator onboard
+operator o
+```
+
+## Description
+
+`operator onboard` is the first command you run after installing Operator OS. It creates a default configuration file at `~/.operator/config.json` and populates your workspace directory (default: `~/.operator/workspace`) with starter template files.
+
+The workspace is initialized with the following structure:
+
+```
+~/.operator/workspace/
+├── AGENTS.md       # Agent behaviour guidelines
+├── IDENTITY.md     # Agent identity configuration
+├── SOUL.md         # Agent values and principles
+├── USER.md         # User context the agent references
+├── memory/         # Persistent agent memory storage
+└── skills/         # Installed skills directory
+```
+
+If a config file already exists at the target path, `onboard` will prompt you to confirm before overwriting it.
+
+After the command completes, the next step is to open `~/.operator/config.json` and add an API key for your chosen provider. You can then verify everything is working with `operator agent -m "Hello!"`.
+
+<Note>
+  The config file path can be overridden with the `OPERATOR_CONFIG` environment variable. If set, `onboard` writes to that path instead of `~/.operator/config.json`.
+</Note>
+
+## Options
+
+`operator onboard` accepts no flags. It is an interactive command that checks for an existing config and prompts for confirmation before overwriting.
+
+## Examples
+
+**First-time setup:**
+
+```bash
+operator onboard
+```
+
+```
+🕸️ operator is ready!
+
+Next steps:
+  1. Add your API key to /home/alice/.operator/config.json
+
+     Recommended:
+     - OpenRouter: https://openrouter.ai/keys (access 100+ models)
+     - Ollama:     https://ollama.com (local, free)
+
+     See README.md for 17+ supported providers.
+
+  2. Chat: operator agent -m "Hello!"
+```
+
+**Re-running onboard when a config already exists:**
+
+```bash
+operator onboard
+```
+
+```
+Config already exists at /home/alice/.operator/config.json
+Overwrite? (y/n): n
+Aborted.
+```
+
+**Using a custom config path:**
+
+```bash
+OPERATOR_CONFIG=/etc/operator/config.json operator onboard
+```
+
+## What gets configured
+
+After running `onboard`, your `~/.operator/config.json` contains the default configuration. You must edit it manually to:
+
+1. Set a provider API key inside `model_list[].api_key`, or under `providers.<name>.api_key`.
+2. Select a default model by setting `agents.defaults.model_name` to a name from `model_list`.
+
+For providers that use OAuth (e.g. `google-antigravity` and `openai`), you can run `operator auth login` instead of adding an API key manually.
+
+See the [configuration reference](/reference/config-schema) for the full schema.
+
+## Related commands
+
+- [`operator agent`](/reference/cli/agent) — chat with the agent after setup
+- [`operator auth login`](/reference/cli/auth) — authenticate with a provider using OAuth
+- [`operator status`](/reference/cli/status) — verify configuration and provider keys are detected

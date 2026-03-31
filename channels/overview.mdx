@@ -1,0 +1,78 @@
+---
+title: "Messaging channels"
+description: "How Operator OS agents receive and send messages across Slack, Telegram, Discord, WhatsApp, and more."
+---
+
+Operator OS connects to messaging platforms through a unified channel system. Each channel is a standalone Go package that registers itself on startup. Once registered, the **Manager** handles message routing, rate limiting, retries, and typing/placeholder indicators — channels only need to implement `Send` and publish inbound messages to the bus.
+
+## How the channel system works
+
+```
+User Message → Channel → MessageBus → Agent Loop → MessageBus → Channel → User
+```
+
+Every inbound message is wrapped in a structured `InboundMessage` with a `Peer` (direct or group), a `Sender` identity, and a `MediaScope`. The agent processes it and publishes an `OutboundMessage` back to the bus. The Manager routes the outbound message to the correct channel worker queue, splits long messages if needed, and calls `channel.Send()`.
+
+## Common configuration fields
+
+Every channel config object shares these fields.
+
+<ParamField body="enabled" type="boolean" required>
+  Whether this channel is active. Set to `true` to start the channel when the gateway boots.
+</ParamField>
+
+<ParamField body="allow_from" type="array of strings">
+  A list of sender identifiers that the agent will accept messages from. If the array is empty, **all senders are accepted** — do not leave this empty in production unless the channel is only accessible to trusted users.
+
+  Supported formats:
+  - `"123456"` — matches the sender's platform-native ID
+  - `"@alice"` — matches the sender's username
+  - `"telegram:123456"` — canonical `platform:id` format (recommended)
+
+  Messages from senders not on the list are silently dropped before any attachments are downloaded.
+</ParamField>
+
+<ParamField body="reasoning_channel_id" type="string">
+  When set, the agent's internal reasoning trace (chain-of-thought) is sent to this channel or chat ID instead of the main conversation. This lets you expose thinking steps in a separate debug channel without cluttering the user-facing chat.
+
+  Leave empty to disable reasoning routing.
+</ParamField>
+
+<Warning>
+  Always set `allow_from` for channels that are publicly reachable (e.g., Telegram, Discord public servers, WhatsApp). Without it, anyone who can find or guess your bot will be able to interact with your agent.
+</Warning>
+
+## Supported channels
+
+<CardGroup cols={2}>
+  <Card title="Slack" icon="slack" href="/channels/slack">
+    Socket Mode integration. Supports reactions, file uploads, slash commands, and thread replies.
+  </Card>
+  <Card title="Telegram" icon="telegram" href="/channels/telegram">
+    Long-polling bot. Supports photos, voice, audio, documents, typing indicators, and placeholder messages.
+  </Card>
+  <Card title="Discord" icon="discord" href="/channels/discord">
+    Gateway bot. Supports file attachments, typing indicators, placeholder messages, and mention-only mode.
+  </Card>
+  <Card title="WhatsApp" icon="whatsapp" href="/channels/whatsapp">
+    Two modes: a WebSocket bridge (any provider) or native mode using whatsmeow with automatic reconnection and QR login.
+  </Card>
+  <Card title="DingTalk" icon="message" href="/channels/other#dingtalk">
+    Enterprise messaging via DingTalk Stream Mode SDK. No public webhook required.
+  </Card>
+  <Card title="Feishu / Lark" icon="message" href="/channels/other#feishu">
+    Feishu enterprise app via WebSocket SDK. Sends rich Interactive Card responses.
+  </Card>
+  <Card title="LINE" icon="message" href="/channels/other#line">
+    LINE Messaging API via webhook. Supports typing (loading animation), media, and reply tokens.
+  </Card>
+  <Card title="QQ" icon="message" href="/channels/other#qq">
+    Native QQ Open Platform bot using the official Tencent botgo SDK over WebSocket.
+  </Card>
+  <Card title="OneBot" icon="message" href="/channels/other#onebot">
+    Universal chatbot standard (V11) for QQ and other protocols via a local WebSocket bridge.
+  </Card>
+  <Card title="WeCom" icon="message" href="/channels/other#wecom">
+    Three modes: Group Bot, Custom App, and AI Bot — for enterprise WeChat deployments.
+  </Card>
+</CardGroup>

@@ -1,0 +1,774 @@
+---
+title: "Configuration file reference"
+description: "Complete reference for every field in ~/.operator/config.json, including agents, model_list, channels, tools, heartbeat, devices, and gateway."
+---
+
+The Operator configuration file lives at `~/.operator/config.json` (or `$OPERATOR_HOME/config.json` if the environment variable is set). It is loaded once at startup; most fields can also be overridden at runtime via [environment variables](/reference/environment-variables).
+
+<Accordion title="Full example config.json">
+
+```json config.json
+{
+  "agents": {
+    "defaults": {
+      "workspace": "~/.operator/workspace",
+      "restrict_to_workspace": true,
+      "model_name": "gpt4",
+      "max_tokens": 8192,
+      "temperature": 0.7,
+      "max_tool_iterations": 20
+    }
+  },
+  "model_list": [
+    {
+      "model_name": "gpt4",
+      "model": "openai/gpt-5.2",
+      "api_key": "sk-your-openai-key",
+      "api_base": "https://api.openai.com/v1"
+    },
+    {
+      "model_name": "claude-sonnet-4.6",
+      "model": "anthropic/claude-sonnet-4.6",
+      "api_key": "sk-ant-your-key"
+    },
+    {
+      "model_name": "gemini",
+      "model": "antigravity/gemini-2.0-flash",
+      "auth_method": "oauth"
+    },
+    {
+      "model_name": "loadbalanced-gpt4",
+      "model": "openai/gpt-5.2",
+      "api_key": "sk-key1",
+      "api_base": "https://api1.example.com/v1"
+    },
+    {
+      "model_name": "loadbalanced-gpt4",
+      "model": "openai/gpt-5.2",
+      "api_key": "sk-key2",
+      "api_base": "https://api2.example.com/v1"
+    }
+  ],
+  "channels": {
+    "telegram": {
+      "enabled": false,
+      "token": "YOUR_TELEGRAM_BOT_TOKEN",
+      "allow_from": ["YOUR_USER_ID"],
+      "reasoning_channel_id": ""
+    },
+    "discord": {
+      "enabled": false,
+      "token": "YOUR_DISCORD_BOT_TOKEN",
+      "allow_from": [],
+      "group_trigger": { "mention_only": false },
+      "reasoning_channel_id": ""
+    }
+  },
+  "tools": {
+    "web": {
+      "brave": { "enabled": false, "api_key": "YOUR_BRAVE_API_KEY", "max_results": 5 },
+      "duckduckgo": { "enabled": true, "max_results": 5 },
+      "perplexity": { "enabled": false, "api_key": "pplx-xxx", "max_results": 5 },
+      "proxy": ""
+    },
+    "exec": {
+      "enable_deny_patterns": true,
+      "custom_deny_patterns": []
+    },
+    "cron": { "exec_timeout_minutes": 5 },
+    "mcp": {
+      "enabled": false,
+      "servers": {
+        "filesystem": {
+          "enabled": false,
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+        }
+      }
+    },
+    "skills": {
+      "registries": {
+        "clawhub": {
+          "enabled": true,
+          "base_url": "https://clawhub.ai"
+        }
+      }
+    }
+  },
+  "heartbeat": { "enabled": true, "interval": 30 },
+  "devices": { "enabled": false, "monitor_usb": true },
+  "gateway": { "host": "127.0.0.1", "port": 18790 }
+}
+```
+
+</Accordion>
+
+---
+
+## `agents`
+
+Global agent settings.
+
+<ParamField body="agents.defaults" type="object">
+  Default parameters applied to every agent unless overridden at the agent level.
+
+  <Expandable title="properties">
+    <ParamField body="workspace" type="string" default="~/.operator/workspace">
+      Absolute or `~`-prefixed path to the agent's working directory. The agent reads and writes files here by default. Set `OPERATOR_HOME` to relocate the base directory; the workspace path is then `$OPERATOR_HOME/workspace`.
+    </ParamField>
+
+    <ParamField body="restrict_to_workspace" type="boolean" default="true">
+      When `true`, the agent cannot read or write files outside the `workspace` directory. Set to `false` to allow full filesystem access (use with care).
+    </ParamField>
+
+    <ParamField body="allow_read_outside_workspace" type="boolean" default="false">
+      When `true`, the agent can read (but not write) files outside the workspace even if `restrict_to_workspace` is `true`. Useful for referencing read-only reference material.
+    </ParamField>
+
+    <ParamField body="model_name" type="string">
+      The `model_name` alias to use by default. Must match a `model_name` entry in `model_list`. Example: `"gpt4"`.
+
+      <Note>Prefer `model_name` over the deprecated `model` field. Both are supported during the transition period.</Note>
+    </ParamField>
+
+    <ParamField body="max_tokens" type="number" default="32768">
+      Maximum number of tokens the model may generate in a single response.
+    </ParamField>
+
+    <ParamField body="temperature" type="number" default="null">
+      Sampling temperature (0.0–2.0). `null` means the provider default is used. Lower values produce more deterministic output; higher values increase creativity.
+    </ParamField>
+
+    <ParamField body="max_tool_iterations" type="number" default="50">
+      Maximum number of tool-call/response cycles per agent turn. Prevents runaway loops. Set to `0` for no limit (not recommended).
+    </ParamField>
+
+    <ParamField body="image_model" type="string">
+      Optional model alias to use for image-generation tasks. Falls back to `model_name` if not set.
+    </ParamField>
+
+    <ParamField body="max_media_size" type="number" default="20971520">
+      Maximum size in bytes for media attachments (images, files) passed to the model. Default is 20 MB (20 × 1024 × 1024).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="agents.list" type="object[]">
+  Optional list of named agents with per-agent overrides. Each entry can override the model, workspace, and skills for a specific agent.
+
+  <Expandable title="properties">
+    <ParamField body="id" type="string" required>
+      Unique identifier for the agent. Referenced in `bindings` and `--agent` CLI flags.
+    </ParamField>
+
+    <ParamField body="name" type="string">
+      Human-readable display name.
+    </ParamField>
+
+    <ParamField body="default" type="boolean" default="false">
+      If `true`, this agent handles requests that don't match any binding.
+    </ParamField>
+
+    <ParamField body="workspace" type="string">
+      Per-agent workspace directory. Overrides `agents.defaults.workspace`.
+    </ParamField>
+
+    <ParamField body="model" type="string | object">
+      Per-agent model. Either a plain string alias (`"gpt4"`) or an object with `primary` and `fallbacks` fields.
+
+      <Expandable title="object form">
+        <ParamField body="primary" type="string">
+          Primary model alias.
+        </ParamField>
+        <ParamField body="fallbacks" type="string[]">
+          Ordered list of fallback model aliases tried when the primary fails.
+        </ParamField>
+      </Expandable>
+    </ParamField>
+
+    <ParamField body="skills" type="string[]">
+      List of skill identifiers pre-loaded for this agent.
+    </ParamField>
+
+    <ParamField body="subagents" type="object">
+      Configuration for sub-agent delegation.
+
+      <Expandable title="properties">
+        <ParamField body="allow_agents" type="string[]">
+          Agent IDs this agent may spawn as sub-agents.
+        </ParamField>
+        <ParamField body="model" type="string | object">
+          Model used for sub-agent tasks.
+        </ParamField>
+      </Expandable>
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+---
+
+## `model_list`
+
+<Note>
+  `model_list` is the recommended way to configure AI providers. The older `providers` top-level key is deprecated and will be removed in v2.0. If only `providers` is present, it is automatically migrated at startup.
+</Note>
+
+An ordered array of model entries. Each entry defines an alias, a provider/model identifier, and credentials. Multiple entries with the **same `model_name`** enable automatic round-robin load balancing across them.
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "gpt4",
+      "model": "openai/gpt-5.2",
+      "api_key": "sk-your-key",
+      "api_base": "https://api.openai.com/v1"
+    }
+  ]
+}
+```
+
+<ParamField body="model_list[].model_name" type="string" required>
+  User-facing alias for this model entry. This is the value you set in `agents.defaults.model_name`. Must be non-empty. Duplicate values across entries are allowed and enable load balancing.
+</ParamField>
+
+<ParamField body="model_list[].model" type="string" required>
+  Protocol-prefixed model identifier in the form `protocol/model-id`. The protocol determines which provider backend is used. If no prefix is given, `openai` is assumed.
+
+  See the [AI provider reference](/reference/providers) for the full list of supported protocols and example model IDs.
+</ParamField>
+
+<ParamField body="model_list[].api_key" type="string">
+  API key for authenticating with the provider. Required for all HTTP-based providers unless `api_base` points to a local unauthenticated server.
+</ParamField>
+
+<ParamField body="model_list[].api_base" type="string">
+  Override the provider's default API endpoint URL. Use this to point at a self-hosted deployment, proxy, or alternative region. Each provider has a compiled-in default that applies when this field is omitted.
+</ParamField>
+
+<ParamField body="model_list[].auth_method" type="string">
+  Authentication method. Set to `"oauth"` for providers that use OAuth-based login (e.g., `antigravity`, `github-copilot`). Omit for API-key–based providers.
+</ParamField>
+
+<ParamField body="model_list[].proxy" type="string">
+  HTTP/HTTPS/SOCKS5 proxy URL to use for requests to this provider. Example: `"http://proxy.corp.example.com:8080"`.
+</ParamField>
+
+<ParamField body="model_list[].connect_mode" type="string">
+  Connection mode for CLI-based providers (`claude-cli`, `codex-cli`, `github-copilot`). Valid values: `"stdio"`, `"grpc"`. Defaults to `"grpc"` for GitHub Copilot.
+</ParamField>
+
+<ParamField body="model_list[].workspace" type="string">
+  Workspace directory for CLI-based providers (`claude-cli`, `codex-cli`). Defaults to `"."` if not set.
+</ParamField>
+
+<ParamField body="model_list[].rpm" type="number">
+  Requests-per-minute cap for this entry. When reached, Operator waits before sending the next request.
+</ParamField>
+
+<ParamField body="model_list[].max_tokens_field" type="string">
+  Override the JSON field name used to pass `max_tokens` in the API request body. Some providers (e.g., newer OpenAI endpoints) require `"max_completion_tokens"` instead of `"max_tokens"`.
+</ParamField>
+
+<ParamField body="model_list[].request_timeout" type="number">
+  Per-request HTTP timeout in seconds. Values `<= 0` fall back to the compiled default of 120 s.
+</ParamField>
+
+### Load balancing
+
+Duplicate a `model_name` across multiple entries to distribute load via round-robin:
+
+```json
+{
+  "model_list": [
+    { "model_name": "gpt4", "model": "openai/gpt-5.2", "api_key": "sk-key1", "api_base": "https://api1.example.com/v1" },
+    { "model_name": "gpt4", "model": "openai/gpt-5.2", "api_key": "sk-key2", "api_base": "https://api2.example.com/v1" },
+    { "model_name": "gpt4", "model": "openai/gpt-5.2", "api_key": "sk-key3", "api_base": "https://api3.example.com/v1" }
+  ]
+}
+```
+
+Every call to model `gpt4` cycles through the three endpoints in sequence.
+
+---
+
+## `channels`
+
+Messaging platform integrations. All channels are disabled by default. Enable only the channels you need.
+
+Every channel config includes the following common fields:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Enable this channel. |
+| `allow_from` | string[] | `[]` | Allowlist of user/account IDs. Empty means all authenticated users are allowed. Accepts both string and numeric IDs. |
+| `reasoning_channel_id` | string | `""` | If set, internal reasoning/thinking output is forwarded to this channel or thread ID instead of the main conversation. |
+
+### `channels.telegram`
+
+<ParamField body="channels.telegram.enabled" type="boolean" default="false">Enable the Telegram bot.</ParamField>
+<ParamField body="channels.telegram.token" type="string">
+  Telegram Bot API token. Obtain from [@BotFather](https://t.me/BotFather).
+</ParamField>
+<ParamField body="channels.telegram.base_url" type="string">
+  Custom Telegram Bot API base URL. Useful when running a local Bot API server.
+</ParamField>
+<ParamField body="channels.telegram.proxy" type="string">
+  HTTP/SOCKS5 proxy for Telegram API requests.
+</ParamField>
+<ParamField body="channels.telegram.allow_from" type="string[]" default="[]">
+  Allowlist of Telegram user IDs (numeric or string).
+</ParamField>
+<ParamField body="channels.telegram.group_trigger" type="object">
+  Controls when the bot responds in group chats.
+
+  <Expandable title="properties">
+    <ParamField body="mention_only" type="boolean" default="false">Only respond when the bot is @mentioned.</ParamField>
+    <ParamField body="prefixes" type="string[]">Respond only when a message starts with one of these prefix strings.</ParamField>
+  </Expandable>
+</ParamField>
+<ParamField body="channels.telegram.typing" type="object">
+  <Expandable title="properties">
+    <ParamField body="enabled" type="boolean" default="true">Show "typing…" indicator while the agent is processing.</ParamField>
+  </Expandable>
+</ParamField>
+<ParamField body="channels.telegram.placeholder" type="object">
+  <Expandable title="properties">
+    <ParamField body="enabled" type="boolean" default="true">Send a placeholder message immediately, then edit it with the final response.</ParamField>
+    <ParamField body="text" type="string" default="Thinking... 💭">Text of the placeholder message.</ParamField>
+  </Expandable>
+</ParamField>
+<ParamField body="channels.telegram.reasoning_channel_id" type="string">Forward reasoning output to this chat ID.</ParamField>
+
+### `channels.discord`
+
+<ParamField body="channels.discord.enabled" type="boolean" default="false">Enable the Discord bot.</ParamField>
+<ParamField body="channels.discord.token" type="string">Discord bot token from the [Discord Developer Portal](https://discord.com/developers/applications).</ParamField>
+<ParamField body="channels.discord.proxy" type="string">HTTP/SOCKS5 proxy for Discord API requests.</ParamField>
+<ParamField body="channels.discord.allow_from" type="string[]" default="[]">Allowlist of Discord user IDs.</ParamField>
+<ParamField body="channels.discord.group_trigger" type="object">
+  <Expandable title="properties">
+    <ParamField body="mention_only" type="boolean" default="false">Only respond when the bot is @mentioned in a server channel.</ParamField>
+    <ParamField body="prefixes" type="string[]">Respond only when a message starts with one of these prefix strings.</ParamField>
+  </Expandable>
+</ParamField>
+<ParamField body="channels.discord.reasoning_channel_id" type="string">Channel ID for reasoning output.</ParamField>
+
+### `channels.slack`
+
+<ParamField body="channels.slack.enabled" type="boolean" default="false">Enable the Slack bot.</ParamField>
+<ParamField body="channels.slack.bot_token" type="string">Slack bot OAuth token (`xoxb-…`).</ParamField>
+<ParamField body="channels.slack.app_token" type="string">Slack app-level token for Socket Mode (`xapp-…`).</ParamField>
+<ParamField body="channels.slack.allow_from" type="string[]" default="[]">Allowlist of Slack user IDs.</ParamField>
+<ParamField body="channels.slack.group_trigger" type="object">
+  <Expandable title="properties">
+    <ParamField body="mention_only" type="boolean" default="false">Only respond when the bot is mentioned.</ParamField>
+  </Expandable>
+</ParamField>
+<ParamField body="channels.slack.reasoning_channel_id" type="string">Channel ID for reasoning output.</ParamField>
+
+### `channels.whatsapp`
+
+<ParamField body="channels.whatsapp.enabled" type="boolean" default="false">Enable the WhatsApp integration.</ParamField>
+<ParamField body="channels.whatsapp.bridge_url" type="string" default="ws://localhost:3001">WebSocket URL of the WhatsApp bridge server.</ParamField>
+<ParamField body="channels.whatsapp.use_native" type="boolean" default="false">Use native WhatsApp mode instead of a bridge.</ParamField>
+<ParamField body="channels.whatsapp.session_store_path" type="string">Path to store WhatsApp session data.</ParamField>
+<ParamField body="channels.whatsapp.allow_from" type="string[]" default="[]">Allowlist of WhatsApp phone numbers or JIDs.</ParamField>
+<ParamField body="channels.whatsapp.reasoning_channel_id" type="string">JID or chat ID for reasoning output.</ParamField>
+
+### `channels.feishu`
+
+<ParamField body="channels.feishu.enabled" type="boolean" default="false">Enable the Feishu/Lark bot.</ParamField>
+<ParamField body="channels.feishu.app_id" type="string">Feishu app ID.</ParamField>
+<ParamField body="channels.feishu.app_secret" type="string">Feishu app secret.</ParamField>
+<ParamField body="channels.feishu.encrypt_key" type="string">Feishu event encryption key.</ParamField>
+<ParamField body="channels.feishu.verification_token" type="string">Feishu webhook verification token.</ParamField>
+<ParamField body="channels.feishu.allow_from" type="string[]" default="[]">Allowlist of Feishu user open IDs.</ParamField>
+<ParamField body="channels.feishu.reasoning_channel_id" type="string">Chat ID for reasoning output.</ParamField>
+
+### `channels.dingtalk`
+
+<ParamField body="channels.dingtalk.enabled" type="boolean" default="false">Enable the DingTalk bot.</ParamField>
+<ParamField body="channels.dingtalk.client_id" type="string">DingTalk app client ID.</ParamField>
+<ParamField body="channels.dingtalk.client_secret" type="string">DingTalk app client secret.</ParamField>
+<ParamField body="channels.dingtalk.allow_from" type="string[]" default="[]">Allowlist of DingTalk user IDs.</ParamField>
+<ParamField body="channels.dingtalk.reasoning_channel_id" type="string">Chat ID for reasoning output.</ParamField>
+
+### `channels.qq`
+
+<ParamField body="channels.qq.enabled" type="boolean" default="false">Enable the QQ bot.</ParamField>
+<ParamField body="channels.qq.app_id" type="string">QQ app ID.</ParamField>
+<ParamField body="channels.qq.app_secret" type="string">QQ app secret.</ParamField>
+<ParamField body="channels.qq.allow_from" type="string[]" default="[]">Allowlist of QQ user IDs.</ParamField>
+<ParamField body="channels.qq.reasoning_channel_id" type="string">Chat ID for reasoning output.</ParamField>
+
+### `channels.line`
+
+<ParamField body="channels.line.enabled" type="boolean" default="false">Enable the LINE bot.</ParamField>
+<ParamField body="channels.line.channel_secret" type="string">LINE channel secret.</ParamField>
+<ParamField body="channels.line.channel_access_token" type="string">LINE channel access token.</ParamField>
+<ParamField body="channels.line.webhook_path" type="string" default="/webhook/line">Webhook path for LINE events.</ParamField>
+<ParamField body="channels.line.allow_from" type="string[]" default="[]">Allowlist of LINE user IDs.</ParamField>
+<ParamField body="channels.line.reasoning_channel_id" type="string">Chat ID for reasoning output.</ParamField>
+
+### `channels.onebot`
+
+<ParamField body="channels.onebot.enabled" type="boolean" default="false">Enable the OneBot v11 adapter (QQ via go-cqhttp or similar).</ParamField>
+<ParamField body="channels.onebot.ws_url" type="string" default="ws://127.0.0.1:3001">WebSocket URL of the OneBot v11 server.</ParamField>
+<ParamField body="channels.onebot.access_token" type="string">Access token for the OneBot server.</ParamField>
+<ParamField body="channels.onebot.reconnect_interval" type="number" default="5">Reconnection interval in seconds when the WebSocket connection drops.</ParamField>
+<ParamField body="channels.onebot.group_trigger" type="object">
+  <Expandable title="properties">
+    <ParamField body="prefixes" type="string[]">Respond only when a group message starts with one of these prefixes.</ParamField>
+  </Expandable>
+</ParamField>
+<ParamField body="channels.onebot.allow_from" type="string[]" default="[]">Allowlist of QQ user IDs.</ParamField>
+<ParamField body="channels.onebot.reasoning_channel_id" type="string">Group or user ID for reasoning output.</ParamField>
+
+### `channels.maixcam`
+
+<ParamField body="channels.maixcam.enabled" type="boolean" default="false">Enable the MaixCam hardware channel.</ParamField>
+<ParamField body="channels.maixcam.host" type="string" default="0.0.0.0">Bind address for the MaixCam listener.</ParamField>
+<ParamField body="channels.maixcam.port" type="number" default="18790">Port for the MaixCam listener.</ParamField>
+<ParamField body="channels.maixcam.allow_from" type="string[]" default="[]">Allowlist of device IDs.</ParamField>
+<ParamField body="channels.maixcam.reasoning_channel_id" type="string">Channel ID for reasoning output.</ParamField>
+
+### `channels.wecom`
+
+WeCom Bot — easier setup, supports group chats via webhook.
+
+<ParamField body="channels.wecom.enabled" type="boolean" default="false">Enable the WeCom bot channel.</ParamField>
+<ParamField body="channels.wecom.token" type="string">WeCom verification token.</ParamField>
+<ParamField body="channels.wecom.encoding_aes_key" type="string">43-character AES encoding key for message encryption.</ParamField>
+<ParamField body="channels.wecom.webhook_url" type="string">WeCom group robot webhook URL.</ParamField>
+<ParamField body="channels.wecom.webhook_path" type="string" default="/webhook/wecom">Incoming webhook path.</ParamField>
+<ParamField body="channels.wecom.allow_from" type="string[]" default="[]">Allowlist of WeCom user IDs.</ParamField>
+<ParamField body="channels.wecom.reply_timeout" type="number" default="5">Reply timeout in seconds.</ParamField>
+<ParamField body="channels.wecom.reasoning_channel_id" type="string">Chat ID for reasoning output.</ParamField>
+
+### `channels.wecom_app`
+
+WeCom self-built application — more features, proactive messaging, private chats only.
+
+<ParamField body="channels.wecom_app.enabled" type="boolean" default="false">Enable the WeCom App channel.</ParamField>
+<ParamField body="channels.wecom_app.corp_id" type="string">WeCom corporation ID.</ParamField>
+<ParamField body="channels.wecom_app.corp_secret" type="string">WeCom application secret.</ParamField>
+<ParamField body="channels.wecom_app.agent_id" type="number">WeCom application agent ID.</ParamField>
+<ParamField body="channels.wecom_app.token" type="string">WeCom verification token.</ParamField>
+<ParamField body="channels.wecom_app.encoding_aes_key" type="string">43-character AES encoding key.</ParamField>
+<ParamField body="channels.wecom_app.webhook_path" type="string" default="/webhook/wecom-app">Incoming webhook path.</ParamField>
+<ParamField body="channels.wecom_app.allow_from" type="string[]" default="[]">Allowlist of WeCom user IDs.</ParamField>
+<ParamField body="channels.wecom_app.reply_timeout" type="number" default="5">Reply timeout in seconds.</ParamField>
+<ParamField body="channels.wecom_app.reasoning_channel_id" type="string">Chat ID for reasoning output.</ParamField>
+
+### `channels.wecom_aibot`
+
+WeCom AI Bot (智能机器人) — official WeCom AI Bot integration with proactive messaging.
+
+<ParamField body="channels.wecom_aibot.enabled" type="boolean" default="false">Enable the WeCom AI Bot channel.</ParamField>
+<ParamField body="channels.wecom_aibot.token" type="string">WeCom verification token.</ParamField>
+<ParamField body="channels.wecom_aibot.encoding_aes_key" type="string">43-character AES encoding key.</ParamField>
+<ParamField body="channels.wecom_aibot.webhook_path" type="string" default="/webhook/wecom-aibot">Incoming webhook path.</ParamField>
+<ParamField body="channels.wecom_aibot.max_steps" type="number" default="10">Maximum streaming steps per response.</ParamField>
+<ParamField body="channels.wecom_aibot.welcome_message" type="string" default="Hello! I'm your AI assistant. How can I help you today?">
+  Message sent automatically when a user opens a chat. Set to `""` to disable.
+</ParamField>
+<ParamField body="channels.wecom_aibot.allow_from" type="string[]" default="[]">Allowlist of WeCom user IDs.</ParamField>
+<ParamField body="channels.wecom_aibot.reasoning_channel_id" type="string">Chat ID for reasoning output.</ParamField>
+
+### `channels.standard`
+
+HTTP/WebSocket standard channel for custom integrations.
+
+<ParamField body="channels.standard.enabled" type="boolean" default="false">Enable the standard WebSocket channel.</ParamField>
+<ParamField body="channels.standard.token" type="string">Bearer token for authenticating incoming connections.</ParamField>
+<ParamField body="channels.standard.allow_origins" type="string[]">CORS allowed origins.</ParamField>
+<ParamField body="channels.standard.ping_interval" type="number" default="30">WebSocket ping interval in seconds.</ParamField>
+<ParamField body="channels.standard.read_timeout" type="number" default="60">Read timeout in seconds.</ParamField>
+<ParamField body="channels.standard.write_timeout" type="number" default="10">Write timeout in seconds.</ParamField>
+<ParamField body="channels.standard.max_connections" type="number" default="100">Maximum simultaneous WebSocket connections.</ParamField>
+<ParamField body="channels.standard.allow_from" type="string[]" default="[]">Allowlist of client IDs.</ParamField>
+
+---
+
+## `tools`
+
+<ParamField body="tools.allow_read_paths" type="string[]">
+  Additional filesystem paths the agent is permitted to read from, even when `restrict_to_workspace` is `true`.
+</ParamField>
+
+<ParamField body="tools.allow_write_paths" type="string[]">
+  Additional filesystem paths the agent is permitted to write to, even when `restrict_to_workspace` is `true`.
+</ParamField>
+
+### `tools.web`
+
+Controls web search and fetch capabilities.
+
+<ParamField body="tools.web.proxy" type="string">
+  HTTP/HTTPS/SOCKS5 proxy URL for all web tool requests. For proxies that require credentials, use the `HTTP_PROXY`/`HTTPS_PROXY` environment variables instead of embedding credentials here.
+</ParamField>
+
+<ParamField body="tools.web.fetch_limit_bytes" type="number" default="10485760">
+  Maximum number of bytes to fetch from a single URL. Default is 10 MB.
+</ParamField>
+
+<ParamField body="tools.web.brave" type="object">
+  Brave Search integration.
+
+  <Expandable title="properties">
+    <ParamField body="enabled" type="boolean" default="false">Enable Brave Search.</ParamField>
+    <ParamField body="api_key" type="string">Brave Search API key. Obtain from the [Brave Search API dashboard](https://brave.com/search/api/).</ParamField>
+    <ParamField body="max_results" type="number" default="5">Maximum number of search results returned per query.</ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="tools.web.duckduckgo" type="object">
+  DuckDuckGo search (no API key required).
+
+  <Expandable title="properties">
+    <ParamField body="enabled" type="boolean" default="true">Enable DuckDuckGo search.</ParamField>
+    <ParamField body="max_results" type="number" default="5">Maximum number of search results returned per query.</ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="tools.web.perplexity" type="object">
+  Perplexity AI search integration.
+
+  <Expandable title="properties">
+    <ParamField body="enabled" type="boolean" default="false">Enable Perplexity search.</ParamField>
+    <ParamField body="api_key" type="string">Perplexity API key (`pplx-…`).</ParamField>
+    <ParamField body="max_results" type="number" default="5">Maximum number of search results returned per query.</ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="tools.web.tavily" type="object">
+  Tavily search integration.
+
+  <Expandable title="properties">
+    <ParamField body="enabled" type="boolean" default="false">Enable Tavily search.</ParamField>
+    <ParamField body="api_key" type="string">Tavily API key.</ParamField>
+    <ParamField body="base_url" type="string">Override the default Tavily API base URL.</ParamField>
+    <ParamField body="max_results" type="number" default="5">Maximum number of results per query.</ParamField>
+  </Expandable>
+</ParamField>
+
+### `tools.exec`
+
+Controls shell command execution safety.
+
+<ParamField body="tools.exec.enable_deny_patterns" type="boolean" default="true">
+  When `true`, a built-in set of dangerous command patterns is blocked before execution. Set to `false` to disable all built-in blocking (not recommended in production).
+
+  Blocked by default: `rm -rf`, `format`, `mkfs`, `dd if=`, `shutdown`, `reboot`, `pkill`, `killall`, `sudo`, `chmod`, `chown`, `curl | sh`, `wget | sh`, `docker run`, `docker exec`, `git push --force`, `eval`, and others.
+</ParamField>
+
+<ParamField body="tools.exec.custom_deny_patterns" type="string[]" default="[]">
+  Additional regular expressions to block. Commands matching any pattern are rejected. Patterns follow Go `regexp` syntax.
+
+  ```json
+  {
+    "custom_deny_patterns": ["\\brm\\s+-r\\b", "\\bkillall\\s+python"]
+  }
+  ```
+</ParamField>
+
+<ParamField body="tools.exec.custom_allow_patterns" type="string[]" default="[]">
+  Regular expressions for commands that are explicitly allowed, overriding any matching deny patterns.
+</ParamField>
+
+### `tools.cron`
+
+<ParamField body="tools.cron.exec_timeout_minutes" type="number" default="5">
+  Maximum execution time in minutes for cron-triggered commands. Set to `0` for no timeout.
+</ParamField>
+
+### `tools.mcp`
+
+Model Context Protocol server integration. MCP extends the agent with tools from external servers.
+
+<ParamField body="tools.mcp.enabled" type="boolean" default="false">
+  Global toggle for all MCP server connections. Must be `true` for any server to connect.
+</ParamField>
+
+<ParamField body="tools.mcp.servers" type="object">
+  Map of server names to server configuration objects. Server names are used only for identification in logs.
+
+  <Expandable title="per-server properties">
+    <ParamField body="enabled" type="boolean" required>Enable this specific MCP server.</ParamField>
+
+    <ParamField body="type" type="string">
+      Transport type: `"stdio"`, `"sse"`, or `"http"`. Auto-detected when omitted: if `url` is set → `sse`; if `command` is set → `stdio`.
+    </ParamField>
+
+    <ParamField body="command" type="string">
+      Executable to launch for `stdio` transport (e.g., `"npx"`, `"python"`).
+    </ParamField>
+
+    <ParamField body="args" type="string[]">
+      Arguments passed to `command` for `stdio` transport.
+    </ParamField>
+
+    <ParamField body="env" type="object">
+      Environment variables injected into the `stdio` process. Use this for API keys the MCP server needs.
+    </ParamField>
+
+    <ParamField body="env_file" type="string">
+      Path to a `.env`-format file whose variables are loaded into the `stdio` process environment.
+    </ParamField>
+
+    <ParamField body="url" type="string">
+      Endpoint URL for `sse` or `http` transport.
+    </ParamField>
+
+    <ParamField body="headers" type="object">
+      HTTP headers sent with every request to `sse`/`http` servers. Commonly used for `Authorization` tokens.
+    </ParamField>
+  </Expandable>
+
+  **Stdio example:**
+
+  ```json
+  {
+    "tools": {
+      "mcp": {
+        "enabled": true,
+        "servers": {
+          "filesystem": {
+            "enabled": true,
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+          }
+        }
+      }
+    }
+  }
+  ```
+
+  **Remote SSE/HTTP example:**
+
+  ```json
+  {
+    "tools": {
+      "mcp": {
+        "enabled": true,
+        "servers": {
+          "context7": {
+            "enabled": true,
+            "type": "http",
+            "url": "https://mcp.context7.com/mcp",
+            "headers": { "CONTEXT7_API_KEY": "ctx7sk-xx" }
+          }
+        }
+      }
+    }
+  }
+  ```
+</ParamField>
+
+<Warning>
+  MCP server configuration (`tools.mcp.servers.*`) cannot be set via environment variables. Use `config.json` for all server definitions.
+</Warning>
+
+### `tools.skills`
+
+Skill discovery and installation via registries.
+
+<ParamField body="tools.skills.registries.clawhub" type="object">
+  ClawHub skill registry configuration.
+
+  <Expandable title="properties">
+    <ParamField body="enabled" type="boolean" default="true">Enable the ClawHub registry for skill search and installation.</ParamField>
+    <ParamField body="base_url" type="string" default="https://clawhub.ai">ClawHub API base URL.</ParamField>
+    <ParamField body="auth_token" type="string">Optional authentication token for the registry.</ParamField>
+    <ParamField body="search_path" type="string" default="/api/v1/search">Search endpoint path.</ParamField>
+    <ParamField body="skills_path" type="string" default="/api/v1/skills">Skills list endpoint path.</ParamField>
+    <ParamField body="download_path" type="string" default="/api/v1/download">Skill download endpoint path.</ParamField>
+    <ParamField body="timeout" type="number">Request timeout in seconds for registry API calls.</ParamField>
+    <ParamField body="max_zip_size" type="number">Maximum ZIP file size in bytes for skill downloads.</ParamField>
+    <ParamField body="max_response_size" type="number">Maximum response size in bytes for registry API calls.</ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="tools.skills.max_concurrent_searches" type="number" default="2">
+  Maximum number of simultaneous registry search requests.
+</ParamField>
+
+<ParamField body="tools.skills.search_cache" type="object">
+  In-memory search result cache settings.
+
+  <Expandable title="properties">
+    <ParamField body="max_size" type="number" default="50">Maximum number of cached search results.</ParamField>
+    <ParamField body="ttl_seconds" type="number" default="300">Cache TTL in seconds (default: 5 minutes).</ParamField>
+  </Expandable>
+</ParamField>
+
+### `tools.media_cleanup`
+
+Automatic cleanup of temporary media files.
+
+<ParamField body="tools.media_cleanup.enabled" type="boolean" default="true">Enable automatic media file cleanup.</ParamField>
+<ParamField body="tools.media_cleanup.max_age_minutes" type="number" default="30">Files older than this are eligible for removal.</ParamField>
+<ParamField body="tools.media_cleanup.interval_minutes" type="number" default="5">How often the cleanup job runs.</ParamField>
+
+---
+
+## `heartbeat`
+
+<ParamField body="heartbeat.enabled" type="boolean" default="true">
+  Send periodic heartbeat pings to the Operator cloud service for uptime monitoring and remote management. Disable if running in an air-gapped environment.
+</ParamField>
+
+<ParamField body="heartbeat.interval" type="number" default="30">
+  Heartbeat interval in minutes. Minimum effective value is 5.
+</ParamField>
+
+---
+
+## `devices`
+
+<ParamField body="devices.enabled" type="boolean" default="false">
+  Enable device monitoring capabilities (currently USB device detection).
+</ParamField>
+
+<ParamField body="devices.monitor_usb" type="boolean" default="true">
+  Monitor USB device plug/unplug events when `devices.enabled` is `true`.
+</ParamField>
+
+---
+
+## `gateway`
+
+The local HTTP/WebSocket gateway that exposes the Operator API on the local machine.
+
+<ParamField body="gateway.host" type="string" default="127.0.0.1">
+  Bind address for the gateway listener. Change to `"0.0.0.0"` to accept connections from the network.
+</ParamField>
+
+<ParamField body="gateway.port" type="number" default="18790">
+  TCP port for the gateway listener.
+</ParamField>
+
+---
+
+## Deprecated: `providers`
+
+<Warning>
+  The top-level `providers` key is deprecated as of v1.x and will be removed in v2.0. Migrate to `model_list` instead. See the [migration guide](/configuration/models) for details.
+
+  If `model_list` is empty and `providers` is present, Operator performs an automatic in-memory migration at startup.
+</Warning>
+
+The legacy format configured providers globally rather than per-model:
+
+```json
+{
+  "providers": {
+    "openai": { "api_key": "sk-...", "api_base": "https://api.openai.com/v1" },
+    "anthropic": { "api_key": "sk-ant-..." }
+  },
+  "agents": {
+    "defaults": { "provider": "openai", "model": "gpt-5.2" }
+  }
+}
+```

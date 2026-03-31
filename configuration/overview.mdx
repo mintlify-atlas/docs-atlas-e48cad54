@@ -1,0 +1,166 @@
+---
+title: "Configuration overview"
+description: "All Operator OS configuration lives in a single JSON file at ~/.operator/config.json. This page explains the top-level structure and how environment variables override it."
+---
+
+## Config file location
+
+Operator reads its configuration from `~/.operator/config.json` on startup. If the file does not exist, Operator starts with built-in defaults so you can run `operator onboard` or edit the file manually.
+
+<Note>
+  Two environment variables control file locations:
+  - `OPERATOR_CONFIG` — override the full path to the config file (e.g. `OPERATOR_CONFIG=/etc/operator/config.json`)
+  - `OPERATOR_HOME` — override the base directory for workspace defaults. When set, the default workspace becomes `$OPERATOR_HOME/workspace`.
+</Note>
+
+## Top-level structure
+
+The file is a single JSON object with these top-level keys:
+
+```json
+{
+  "agents": {
+    "defaults": { ... }
+  },
+  "model_list": [ ... ],
+  "channels": {
+    "telegram": { ... },
+    "discord": { ... },
+    "slack": { ... }
+  },
+  "tools": {
+    "web": { ... },
+    "exec": { ... },
+    "mcp": { ... },
+    "cron": { ... },
+    "skills": { ... }
+  },
+  "heartbeat": {
+    "enabled": true,
+    "interval": 30
+  },
+  "devices": {
+    "enabled": false,
+    "monitor_usb": true
+  },
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18790
+  }
+}
+```
+
+| Section | Purpose |
+| --- | --- |
+| `agents` | Default model, workspace, and runtime limits for all agents |
+| `model_list` | Declare every AI model the agent can use, with credentials and routing |
+| `channels` | Messaging integrations (Telegram, Discord, Slack, WhatsApp, and more) |
+| `tools` | Web search, shell execution, MCP servers, cron scheduling, and skills |
+| `heartbeat` | Periodic health-check ping sent from the agent |
+| `devices` | USB device monitoring and hardware integration |
+| `gateway` | Local HTTP gateway host and port |
+
+## Environment variable overrides
+
+Every field in `config.json` has a corresponding environment variable. The pattern is:
+
+```
+OPERATOR_<SECTION>_<KEY>
+```
+
+Nested keys use underscores as separators. Environment variables are applied **after** the file is loaded, so they always win.
+
+```bash
+# Override the default model
+OPERATOR_AGENTS_DEFAULTS_MODEL_NAME=claude-sonnet-4.6
+
+# Enable deny patterns for shell execution
+OPERATOR_TOOLS_EXEC_ENABLE_DENY_PATTERNS=true
+
+# Change the gateway port
+OPERATOR_GATEWAY_PORT=18791
+
+# Override the workspace path
+OPERATOR_AGENTS_DEFAULTS_WORKSPACE=/home/user/myworkspace
+```
+
+<Tip>
+  Environment variables are useful in containers or CI environments where you
+  don't want to write a config file to disk. Map secrets as environment
+  variables rather than storing API keys in the JSON file.
+</Tip>
+
+## Complete example
+
+The following is an abridged version of the full example configuration shipped with Operator:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "workspace": "~/.operator/workspace",
+      "restrict_to_workspace": true,
+      "model_name": "gpt4",
+      "max_tokens": 8192,
+      "temperature": 0.7,
+      "max_tool_iterations": 20
+    }
+  },
+  "model_list": [
+    {
+      "model_name": "gpt4",
+      "model": "openai/gpt-5.2",
+      "api_key": "sk-your-openai-key",
+      "api_base": "https://api.openai.com/v1"
+    },
+    {
+      "model_name": "claude-sonnet-4.6",
+      "model": "anthropic/claude-sonnet-4.6",
+      "api_key": "sk-ant-your-key",
+      "api_base": "https://api.anthropic.com/v1"
+    },
+    {
+      "model_name": "gemini",
+      "model": "antigravity/gemini-2.0-flash",
+      "auth_method": "oauth"
+    }
+  ],
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "token": "YOUR_TELEGRAM_BOT_TOKEN",
+      "allow_from": ["YOUR_TELEGRAM_USER_ID"]
+    },
+    "discord": {
+      "enabled": false,
+      "token": "YOUR_DISCORD_BOT_TOKEN",
+      "allow_from": []
+    }
+  },
+  "tools": {
+    "exec": {
+      "enable_deny_patterns": true,
+      "custom_deny_patterns": []
+    },
+    "web": {
+      "duckduckgo": { "enabled": true, "max_results": 5 }
+    }
+  },
+  "heartbeat": { "enabled": true, "interval": 30 },
+  "gateway": { "host": "127.0.0.1", "port": 18790 }
+}
+```
+
+## Next steps
+
+<CardGroup cols={3}>
+  <Card title="AI model configuration" icon="brain" href="/configuration/models">
+    Add providers, set API keys, and configure multi-model load balancing.
+  </Card>
+  <Card title="Agent configuration" icon="robot" href="/configuration/agents">
+    Set workspace paths, token limits, temperature, and tool iteration caps.
+  </Card>
+  <Card title="Security & sandboxing" icon="shield" href="/configuration/security">
+    Restrict workspaces, block dangerous shell commands, and limit channel access.
+  </Card>
+</CardGroup>

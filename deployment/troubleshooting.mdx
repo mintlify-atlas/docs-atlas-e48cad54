@@ -1,0 +1,406 @@
+---
+title: "Troubleshooting"
+description: "Diagnose and fix common Operator OS issues: model configuration errors, gateway startup failures, channel connection problems, memory persistence, and more."
+---
+
+Use this guide to diagnose and resolve the most common issues encountered when running Operator OS. Each entry describes the symptom, explains the root cause, and provides a concrete fix.
+
+<Note>
+  Before diving into specific issues, confirm you are running the latest release. Many bugs are fixed between versions. Run `operator --version` to check.
+</Note>
+
+---
+
+<AccordionGroup>
+
+<Accordion title='"model not found in model_list" or OpenRouter "free is not a valid model ID"'>
+
+**Symptom**
+
+You see one or both of these errors at startup or when sending a message:
+
+```
+Error creating provider: model "openrouter/free" not found in model_list
+```
+```
+OpenRouter API error 400: "free is not a valid model ID"
+```
+
+**Cause**
+
+The `agents.defaults.model` field must match a `model_name` value in `model_list` exactly. Additionally, the `model` field inside the matching `model_list` entry is the identifier sent verbatim to the API — it must be a valid, fully-qualified model ID, not a shorthand.
+
+Common mistakes:
+
+- `"model": "free"` — OpenRouter receives the string `free` and rejects it.
+- `"agents.defaults.model": "openrouter-free"` but no entry in `model_list` with `"model_name": "openrouter-free"`.
+
+**Fix**
+
+Ensure the names match and use fully-qualified OpenRouter model IDs:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": "openrouter-free"
+    }
+  },
+  "model_list": [
+    {
+      "model_name": "openrouter-free",
+      "model": "openrouter/free",
+      "api_key": "sk-or-v1-YOUR_OPENROUTER_KEY",
+      "api_base": "https://openrouter.ai/api/v1"
+    }
+  ]
+}
+```
+
+Valid free-tier OpenRouter model IDs:
+
+- `openrouter/free` — automatic free-tier routing
+- `google/gemini-2.0-flash-exp:free`
+- `meta-llama/llama-3.1-8b-instruct:free`
+
+Get your API key at [openrouter.ai/keys](https://openrouter.ai/keys).
+
+</Accordion>
+
+<Accordion title="Gateway won't start — port already in use">
+
+**Symptom**
+
+```
+listen tcp :18790: bind: address already in use
+```
+
+The `operator gateway` command exits immediately after printing this error.
+
+**Cause**
+
+Port `18790` is the default port for the Operator OS HTTP server and health endpoint. Another process — possibly a previous gateway instance that did not shut down cleanly — is already listening on it.
+
+**Fix**
+
+Find and stop the conflicting process:
+
+```bash
+# Find which process is using the port
+sudo ss -tlnp | grep 18790
+# or
+sudo lsof -i :18790
+
+# Kill it by PID (replace 12345 with the actual PID)
+kill 12345
+```
+
+If you need to run Operator OS on a different port, override it in your config:
+
+```json
+{
+  "server": {
+    "port": 18791
+  }
+}
+```
+
+In Docker, update the port mapping accordingly:
+
+```yaml
+ports:
+  - "18791:18791"
+```
+
+<Warning>
+  If you are running the gateway as a systemd service, use `sudo systemctl stop operator` instead of killing the process directly. Killing the process without stopping the service unit will cause systemd to restart it immediately.
+</Warning>
+
+</Accordion>
+
+<Accordion title="Channel not connecting — Slack, Discord, or Telegram bot is offline">
+
+**Symptom**
+
+The gateway starts without errors but your bot never comes online in the messaging channel. You may see connection timeout errors in the logs:
+
+```
+channel=slack error="connection failed: invalid_auth"
+channel=discord error="401 Unauthorized"
+channel=telegram error="Unauthorized"
+```
+
+**Cause**
+
+The bot token or app token is missing, incorrect, expired, or the channel is not enabled in `config.json`.
+
+**Fix**
+
+1. Verify the channel is enabled and tokens are populated:
+
+```json
+{
+  "channels": {
+    "slack": {
+      "enabled": true,
+      "bot_token": "xoxb-YOUR_SLACK_BOT_TOKEN",
+      "app_token": "xapp-YOUR_SLACK_APP_TOKEN"
+    },
+    "discord": {
+      "enabled": true,
+      "bot_token": "YOUR_DISCORD_BOT_TOKEN"
+    },
+    "telegram": {
+      "enabled": true,
+      "bot_token": "123456:YOUR_TELEGRAM_BOT_TOKEN"
+    }
+  }
+}
+```
+
+2. Ensure there are no trailing spaces or newline characters in token values.
+
+3. For Slack specifically, the bot requires **both** a `bot_token` (starting with `xoxb-`) **and** an `app_token` (starting with `xapp-`). The app token requires the `connections:write` scope and Socket Mode to be enabled in your Slack App settings.
+
+4. Restart the gateway after editing the config:
+
+```bash
+operator gateway
+# or, if running as a service:
+sudo systemctl restart operator
+```
+
+</Accordion>
+
+<Accordion title="Agent not responding — messages are received but no reply is sent">
+
+**Symptom**
+
+The channel connects successfully and the bot appears online, but messages sent to it receive no reply. No errors appear in the gateway logs.
+
+**Cause**
+
+Most commonly, the `agents.defaults.model` value does not match any `model_name` in `model_list`, or the API key for the configured model is invalid. The gateway can connect to channels independently of the LLM provider — a channel connection succeeding does not confirm the model is correctly configured.
+
+**Fix**
+
+1. Test the model configuration directly from the CLI:
+
+```bash
+operator agent -m "Hello, are you there?"
+```
+
+If this command hangs or returns an error, the issue is with the model configuration or API key, not the channel.
+
+2. Check that `agents.defaults.model` matches a `model_name` in `model_list`:
+
+```json
+{
+  "model_list": [
+    {
+      "model_name": "claude-4-5-sonnet",
+      "model": "anthropic/claude-4-5-sonnet-20260220",
+      "api_key": "sk-ant-YOUR_KEY"
+    }
+  ],
+  "agents": {
+    "defaults": {
+      "model": "claude-4-5-sonnet"
+    }
+  }
+}
+```
+
+3. Verify your API key has not expired or been revoked by testing it directly against the provider's API.
+
+4. If you are using Ollama for local inference, confirm Ollama is running and the model is pulled:
+
+```bash
+ollama list
+ollama pull llama3
+```
+
+</Accordion>
+
+<Accordion title="Memory and config not persisting across restarts">
+
+**Symptom**
+
+After restarting the agent or rebooting the machine, the agent has no memory of previous conversations. In Docker, `config.json` resets to defaults on every container restart.
+
+**Cause**
+
+The `~/.operator` directory (or `/root/.operator` in Docker) is not being persisted to durable storage. In Docker this happens when no volume is mounted for that path — writes go into the container's writable layer and are lost when the container is removed.
+
+**Fix**
+
+**Native deployment:** Ensure the binary is reading from and writing to a consistent `OPERATOR_HOME`. By default this is `~/.operator`. Confirm you are running as the same user each time.
+
+**Docker deployment:** Mount a host directory or named volume to `/root/.operator`:
+
+```yaml
+services:
+  operator-gateway:
+    image: docker.io/standardws/operator:latest
+    profiles:
+      - gateway
+    volumes:
+      - ./data:/root/.operator   # host-bind mount
+    restart: on-failure
+```
+
+Or with named volumes (preferred for production):
+
+```yaml
+services:
+  operator-gateway:
+    image: docker.io/standardws/operator:latest
+    profiles:
+      - gateway
+    volumes:
+      - operator-data:/root/.operator
+    restart: on-failure
+
+volumes:
+  operator-data:
+```
+
+After adding the volume, restart the stack:
+
+```bash
+docker compose -f docker/docker-compose.yml --profile gateway down
+docker compose -f docker/docker-compose.yml --profile gateway up -d
+```
+
+<Warning>
+  Never use `docker compose down -v` in production — the `-v` flag removes named volumes and permanently deletes all persisted memory and configuration.
+</Warning>
+
+</Accordion>
+
+<Accordion title="Config file not found or onboard prompts on every start">
+
+**Symptom**
+
+Running `operator gateway` always asks onboarding questions, or you see:
+
+```
+config file not found: ~/.operator/config.json
+```
+
+**Cause**
+
+Either `operator onboard` was never run, the binary is being run as a different user than the one who ran `onboard`, or the config path was changed and the binary cannot locate it.
+
+**Fix**
+
+Run onboard once as the correct user:
+
+```bash
+operator onboard
+```
+
+Confirm the config file exists:
+
+```bash
+ls -la ~/.operator/config.json
+```
+
+If you store the config in a non-default location, set the path explicitly (check `operator --help` for the flag name, or set `OPERATOR_HOME` in your environment):
+
+```bash
+export OPERATOR_HOME=/etc/operator
+operator gateway
+```
+
+In Docker, the entrypoint script (`docker/entrypoint.sh`) runs `operator onboard` automatically only when **both** the config file and workspace directory are absent. If only one is missing (e.g., workspace was deleted but config is mounted read-only), the entrypoint skips onboard to avoid an interactive prompt hanging the container.
+
+</Accordion>
+
+<Accordion title="Agent has access to files outside the workspace">
+
+**Symptom**
+
+The agent can read or write files beyond `~/.operator/workspace`, which is unexpected given the default sandbox setting.
+
+**Cause**
+
+The `restrict_to_workspace` setting has been explicitly set to `false` in your configuration.
+
+**Fix**
+
+Remove the override or set it back to `true`:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "restrict_to_workspace": true
+    }
+  }
+}
+```
+
+With sandboxing enabled, the agent's `exec` and file tools are confined to `~/.operator/workspace` (or the configured `workspace_path`). The `exec` tool also blocks a set of destructive commands (`rm -rf /`, disk formatting, system shutdown commands) regardless of sandbox state.
+
+<Warning>
+  Only disable `restrict_to_workspace` in single-user, trusted environments where you explicitly need the agent to manage files across the host filesystem (e.g., system administration automation).
+</Warning>
+
+</Accordion>
+
+<Accordion title="Binary won't run on the target architecture">
+
+**Symptom**
+
+```
+exec format error
+```
+
+or
+
+```
+Illegal instruction (core dumped)
+```
+
+**Cause**
+
+The binary was compiled for a different architecture than the target machine. For example, an `amd64` binary cannot run on an `arm64` device.
+
+**Fix**
+
+Verify the binary matches the target:
+
+```bash
+# On the target machine
+uname -m           # aarch64 → need arm64 binary, x86_64 → need amd64 binary
+file /usr/local/bin/operator   # shows ELF architecture
+```
+
+Download or cross-compile the correct binary. See [Cross-compilation](#cross-compilation) in the [Edge hardware](/deployment/edge-hardware) guide for the exact build commands for each architecture.
+
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Getting further help
+
+If none of the above resolves your issue, collect the following before asking for help:
+
+```bash
+# Operator version
+operator --version
+
+# System information
+uname -a
+
+# Config (redact API keys before sharing)
+cat ~/.operator/config.json
+
+# Gateway logs (last 100 lines)
+operator gateway 2>&1 | tail -100
+```
+
+Then open an issue or ask on the community Discord linked from the [Operator OS GitHub repository](https://github.com/avrilonline/Operator-OS).

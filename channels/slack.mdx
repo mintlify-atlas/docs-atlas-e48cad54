@@ -1,0 +1,107 @@
+---
+title: "Slack"
+description: "Connect your Operator OS agent to Slack using Socket Mode — no public webhook endpoint required."
+---
+
+Operator integrates with Slack via **Socket Mode**, which opens a persistent WebSocket connection to Slack's servers. This means you do not need to expose a public HTTPS endpoint to receive events — the connection is outbound from your server.
+
+The channel supports:
+- Direct messages and channel messages
+- Thread replies (replies stay in the originating thread)
+- App mentions (`@YourBot` in a channel)
+- Slash commands
+- File uploads (images, documents) sent by users
+- Sending files back to users via `SendMedia`
+- `👀` reaction on inbound messages while the agent is thinking, replaced with `✅` when the reply is sent
+
+## Setup
+
+<Steps>
+  <Step title="Create a Slack App">
+    Go to [api.slack.com/apps](https://api.slack.com/apps) and click **Create New App** → **From scratch**. Give it a name and pick your workspace.
+  </Step>
+  <Step title="Enable Socket Mode">
+    In the left sidebar, go to **Settings → Socket Mode** and toggle it on. Slack will generate an **App-Level Token** (starts with `xapp-`). Copy it — this is your `app_token`.
+  </Step>
+  <Step title="Add bot scopes">
+    Go to **OAuth & Permissions → Scopes → Bot Token Scopes** and add:
+
+    | Scope | Purpose |
+    |---|---|
+    | `chat:write` | Send messages |
+    | `im:history` | Read DMs |
+    | `channels:history` | Read channel messages |
+    | `groups:history` | Read private channel messages |
+    | `app_mentions:read` | Receive @mention events |
+    | `reactions:write` | Add/remove emoji reactions |
+    | `files:read` | Download files shared by users |
+    | `files:write` | Upload files to Slack |
+    | `commands` | Register slash commands (optional) |
+  </Step>
+  <Step title="Subscribe to events">
+    Go to **Event Subscriptions** and enable it. Under **Subscribe to bot events**, add:
+    - `message.im` — DMs
+    - `message.channels` — public channel messages
+    - `message.groups` — private channel messages
+    - `app_mention` — @mentions in channels
+  </Step>
+  <Step title="Install the app">
+    Go to **OAuth & Permissions** and click **Install to Workspace**. After authorizing, copy the **Bot User OAuth Token** (starts with `xoxb-`). This is your `bot_token`.
+  </Step>
+  <Step title="Configure Operator">
+    Add the following to your `config.json`:
+
+    ```json
+    {
+      "channels": {
+        "slack": {
+          "enabled": true,
+          "bot_token": "xoxb-your-bot-token",
+          "app_token": "xapp-your-app-token",
+          "allow_from": ["U01234ABCDE"],
+          "reasoning_channel_id": ""
+        }
+      }
+    }
+    ```
+  </Step>
+  <Step title="Invite the bot to channels">
+    In Slack, open any channel where you want to use the agent and type `/invite @YourBotName`. For DMs, you can message the bot directly.
+  </Step>
+</Steps>
+
+## Configuration reference
+
+<ParamField body="enabled" type="boolean" required>
+  Set to `true` to activate the Slack channel.
+</ParamField>
+
+<ParamField body="bot_token" type="string" required>
+  The Bot User OAuth Token for your Slack app. Starts with `xoxb-`. Found under **OAuth & Permissions** after installing the app to your workspace.
+</ParamField>
+
+<ParamField body="app_token" type="string" required>
+  The App-Level Token used for Socket Mode. Starts with `xapp-`. Generated under **Settings → Socket Mode**. Must have the `connections:write` scope.
+</ParamField>
+
+<ParamField body="allow_from" type="array of strings">
+  Slack user IDs (e.g. `"U01234ABCDE"`) allowed to message the agent. Find your user ID in your Slack profile under **More → Profile → three-dot menu → Copy member ID**.
+
+  Leave empty to allow all workspace members. See [Common configuration fields](/channels/overview#common-configuration-fields) for format options.
+</ParamField>
+
+<ParamField body="reasoning_channel_id" type="string">
+  A Slack channel ID (e.g. `"C0987ZYXWVU"`) where agent reasoning traces are sent. Leave empty to disable. See [Messaging channels](/channels/overview#common-configuration-fields) for details.
+</ParamField>
+
+## Messaging the agent
+
+**Direct message:** Open the app's DM and type your message.
+
+**In a channel:** Either `@mention` the bot (`@YourBot what is the weather?`) or, if `mention_only` is disabled in `group_trigger`, send any message in a channel the bot is a member of.
+
+**Threads:** Replies in threads are routed back to the same thread automatically. The `chatID` used internally is `channelID/threadTimestamp`.
+
+<Note>
+  The Slack channel sends a `👀` reaction to the inbound message as soon as the agent starts processing. When the reply is sent, the reaction is replaced with `✅`. This gives users instant feedback that their message was received.
+</Note>

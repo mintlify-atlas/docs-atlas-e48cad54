@@ -1,0 +1,271 @@
+---
+title: "Built-in tools"
+description: "Every tool available to Operator OS agents out of the box, and how to configure them."
+---
+
+Operator OS agents reason and act through tools. When the LLM decides it needs to take an action — run a command, read a file, search the web, or delegate to another agent — it emits a tool call. The runtime dispatches that call to the matching tool, executes it, and feeds the result back into the conversation. No plumbing code is required in your agent definition.
+
+Tools are registered in a `ToolRegistry` at startup. Each tool exposes a name, a plain-English description, and a JSON Schema for its parameters; this is what the LLM sees when it decides which tool to invoke.
+
+<Note>
+  MCP tools and installed Skills tools are added to the same registry automatically when their servers connect or their packages are loaded. The agent cannot tell the difference between a built-in tool and an MCP or Skills tool.
+</Note>
+
+## Tool categories
+
+<CardGroup cols={2}>
+  <Card title="Shell" icon="terminal">
+    Run arbitrary shell commands inside the agent workspace with configurable safety guards.
+  </Card>
+  <Card title="Filesystem" icon="folder-open">
+    Read, write, edit, and list files and directories within the workspace boundary.
+  </Card>
+  <Card title="Web" icon="globe">
+    Search the web via Brave, DuckDuckGo, or Perplexity, and fetch full page content.
+  </Card>
+  <Card title="Scheduling" icon="clock">
+    Schedule one-off or recurring tasks using cron expressions or relative intervals.
+  </Card>
+  <Card title="Agents" icon="share-nodes">
+    Spawn sub-agents to execute tasks independently and report results back asynchronously.
+  </Card>
+  <Card title="Messaging" icon="message">
+    Send messages to users across any configured channel (Telegram, Discord, Slack, etc.).
+  </Card>
+  <Card title="Hardware I/O" icon="microchip">
+    Communicate with I2C and SPI bus peripherals directly from agent logic. Linux only.
+  </Card>
+  <Card title="MCP & Skills" icon="puzzle-piece">
+    Extend the agent with external MCP servers or installable Skill packages from ClawHub.
+  </Card>
+</CardGroup>
+
+---
+
+## Shell
+
+| Tool | Description |
+|------|-------------|
+| `exec` | Execute a shell command in the agent workspace. |
+
+The `exec` tool runs commands through the host shell and returns combined stdout/stderr. It enforces a deny-list of dangerous patterns by default (destructive deletes, privilege escalation, remote execution pipes, etc.) and optionally restricts commands to paths inside the workspace.
+
+```json
+{
+  "tools": {
+    "exec": {
+      "enable_deny_patterns": true,
+      "custom_deny_patterns": ["\\brm\\s+-r\\b", "\\bkillall\\s+python"]
+    }
+  }
+}
+```
+
+<ParamField body="enable_deny_patterns" type="boolean" default="true">
+  When `true`, a built-in set of regex patterns blocks destructive commands such as `rm -rf`, `sudo`, `docker run`, `git push`, and pipe-to-shell constructs. Set to `false` to disable all default blocking.
+</ParamField>
+
+<ParamField body="custom_deny_patterns" type="array">
+  Additional regular expressions to block. Commands matching any pattern are rejected before execution.
+</ParamField>
+
+---
+
+## Filesystem
+
+| Tool | Description |
+|------|-------------|
+| `read_file` | Read the full contents of a file. |
+| `write_file` | Write content to a file (creates or overwrites). |
+| `edit_file` | Replace an exact substring inside a file without rewriting the whole thing. |
+| `list_dir` | List files and subdirectories at a given path. |
+
+All filesystem tools share a workspace-restriction flag. When restriction is enabled, any path that resolves — including through symlinks — outside the workspace root is rejected with an access-denied error.
+
+---
+
+## Web
+
+| Tool | Description |
+|------|-------------|
+| `web_search` | Search the web and return a ranked list of results (title, URL, snippet). |
+| `web_fetch` | Fetch a URL and return the extracted text content of the page. |
+
+Three search providers are supported. At least one must be enabled for `web_search` to function. `web_fetch` works independently of any provider.
+
+<Tabs>
+  <Tab title="DuckDuckGo">
+    Free, no API key required. Enabled by default.
+
+    ```json
+    {
+      "tools": {
+        "web": {
+          "duckduckgo": {
+            "enabled": true,
+            "max_results": 5
+          }
+        }
+      }
+    }
+    ```
+
+    <ParamField body="enabled" type="boolean" default="true">
+      Enable DuckDuckGo search.
+    </ParamField>
+    <ParamField body="max_results" type="integer" default="5">
+      Maximum number of search results returned per query.
+    </ParamField>
+  </Tab>
+  <Tab title="Brave">
+    Higher-quality results with a dedicated API. Requires a [Brave Search API key](https://brave.com/search/api/).
+
+    ```json
+    {
+      "tools": {
+        "web": {
+          "brave": {
+            "enabled": true,
+            "api_key": "YOUR_BRAVE_API_KEY",
+            "max_results": 5
+          }
+        }
+      }
+    }
+    ```
+
+    <ParamField body="enabled" type="boolean" default="false">
+      Enable Brave search.
+    </ParamField>
+    <ParamField body="api_key" type="string" required>
+      Your Brave Search API key.
+    </ParamField>
+    <ParamField body="max_results" type="integer" default="5">
+      Maximum number of search results returned per query.
+    </ParamField>
+  </Tab>
+  <Tab title="Perplexity">
+    LLM-powered search that returns synthesized answers. Requires a [Perplexity API key](https://www.perplexity.ai/settings/api).
+
+    ```json
+    {
+      "tools": {
+        "web": {
+          "perplexity": {
+            "enabled": true,
+            "api_key": "pplx-xxx",
+            "max_results": 5
+          }
+        }
+      }
+    }
+    ```
+
+    <ParamField body="enabled" type="boolean" default="false">
+      Enable Perplexity search.
+    </ParamField>
+    <ParamField body="api_key" type="string" required>
+      Your Perplexity API key.
+    </ParamField>
+    <ParamField body="max_results" type="integer" default="5">
+      Maximum number of results (citations) returned per query.
+    </ParamField>
+  </Tab>
+</Tabs>
+
+<Tip>
+  You can enable multiple providers simultaneously. The agent selects the provider that best fits the context, or you can guide it via the system prompt.
+</Tip>
+
+An optional `proxy` field is available under `tools.web` for routing all web requests through an HTTP/SOCKS proxy:
+
+```json
+{
+  "tools": {
+    "web": {
+      "proxy": "http://127.0.0.1:7890"
+    }
+  }
+}
+```
+
+---
+
+## Scheduling
+
+| Tool | Description |
+|------|-------------|
+| `cron` | Schedule a one-off reminder, a recurring task, or a shell command on a cron expression. |
+
+The `cron` tool accepts three scheduling modes:
+
+- **`at_seconds`** — run once after N seconds (e.g. `at_seconds: 600` for "in 10 minutes")
+- **`every_seconds`** — repeat every N seconds (e.g. `every_seconds: 3600` for "every hour")
+- **`cron_expr`** — a standard cron expression for complex schedules (e.g. `"0 9 * * 1-5"` for weekday mornings)
+
+```json
+{
+  "tools": {
+    "cron": {
+      "exec_timeout_minutes": 5
+    }
+  }
+}
+```
+
+<ParamField body="exec_timeout_minutes" type="integer" default="5">
+  Maximum runtime for shell commands triggered by a cron job. Set to `0` for no limit.
+</ParamField>
+
+---
+
+## Agent delegation
+
+| Tool | Description |
+|------|-------------|
+| `spawn` | Spawn a sub-agent to handle a task in the background. Returns immediately; the sub-agent reports back when done. |
+
+The `spawn` tool delegates work to a separate agent instance. It accepts a `task` description, an optional `label` for display purposes, and an optional `agent_id` to route the task to a specific named agent.
+
+Sub-agents run asynchronously. The parent agent receives a completion callback once the sub-agent finishes and can continue its own work in the meantime.
+
+---
+
+## Messaging
+
+| Tool | Description |
+|------|-------------|
+| `message` | Send a message to the user on a chat channel. |
+
+The `message` tool posts content back to the originating channel (Telegram, Discord, Slack, etc.) and optionally to a different channel or chat ID. The agent uses this tool whenever it wants to communicate proactively rather than waiting for the next turn.
+
+---
+
+## Hardware I/O
+
+Hardware tools are only registered on Linux hosts. They are intended for edge deployments where the agent runs directly on embedded or IoT hardware.
+
+| Tool | Description |
+|------|-------------|
+| `i2c` | Interact with I2C bus devices: detect buses, scan for devices, read bytes, write bytes. |
+| `spi` | Interact with SPI bus devices: list devices, perform full-duplex transfers, read bytes. |
+
+<Warning>
+  Write operations on `i2c` and `spi` require explicit confirmation (`"confirm": true`) as a safety guard against accidental peripheral writes.
+</Warning>
+
+---
+
+## MCP tools
+
+When MCP is enabled and servers are connected, each tool exposed by a connected server is registered automatically as `mcp_<server>_<tool>`. The agent can call these tools exactly like any built-in tool.
+
+See [Model Context Protocol](/tools/mcp) for configuration details.
+
+---
+
+## Skills tools
+
+Installed skills can contribute additional tools to the registry. After a skill is installed, the agent gains access to all tools the skill provides.
+
+See [Skills](/tools/skills) for how to discover and install skills from ClawHub.
